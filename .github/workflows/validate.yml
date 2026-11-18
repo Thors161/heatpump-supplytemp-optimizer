@@ -1,4 +1,4 @@
-name: Marketplace validation
+name: Integration validation
 on:
   push:
   pull_request:

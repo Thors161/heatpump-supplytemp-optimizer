@@ -46,25 +46,25 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.1**. This source tree is not proof of a published Marketplace listing.
+This is **2.0.0-beta.1**.
 
 ## Installation
 
-### From Marketplace / HACS, after the repository is published
+### Add the repository manually in HACS
 
-1. Add the public repository URL as a custom repository, category **Integration**.
+1. In HACS, add `https://github.com/Thors161/heatpump-supplytemp-optimizer` under
+   **Custom repositories** and select **Integration** as the category.
 2. Download the integration and restart Home Assistant.
 3. Open **Settings → Devices & services → Add integration** and search for
    **Heat Pump Supply Temperature Optimizer**.
 4. Configure source entities and rooms, or choose **Import local profile**.
 
-Default catalog inclusion is separate from installation by a custom repository URL.
-
-### Manual beta installation
+### Copy the integration files manually
 
 1. Copy `custom_components/heatpump_supplytemp_optimizer/` to the HA configuration directory,
    keeping that directory structure. No package YAML or custom Jinja files are needed.
-2. Restart HA and add the integration as above.
+2. Restart Home Assistant, then go to **Settings → Devices & services → Add integration**
+   and search for **Heat Pump Supply Temperature Optimizer**.
 3. Leave equipment-command automations unchanged while reviewing the advice.
 
 The integration starts with its master and price switches **off** on first setup.
@@ -249,7 +249,7 @@ The new integration is advisory. Installing it does not itself migrate, enable o
 retarget the existing equipment-control automation. Removing the integration and
 restoring the old files/automation references provides rollback.
 
-## Development and publication
+## Development and GitHub releases
 
 ```bash
 python3.14 -m venv .venv
@@ -263,10 +263,9 @@ dependency may also need setuptools and wheel available during the offline build
 
 If you fork or transfer the repository, run `python tools/prepare_repository.py YOUR_GITHUB_USER`
 (or use the organization name with `--maintainer YOUR_GITHUB_USER`) to update the
-manifest's repository URLs and code owners. Before publishing, run
-`python tools/check_repository.py --release`, then the test suite. The Marketplace
-source layout is `custom_components/heatpump_supplytemp_optimizer/`
-with `hacs.json`, tagged versions, CI and a license. Catalog submission is optional.
+manifest's repository URLs and code owners. Before tagging a GitHub release, run
+`python tools/check_repository.py --release`, then the test suite. GitHub Actions
+uses Hassfest to validate the integration and HACS to validate the custom repository.
 
 The repository intentionally omits private profiles, HA `.storage`, source data,
 reports, logs and user-specific calibration. Diagnostics expose input-role names,
