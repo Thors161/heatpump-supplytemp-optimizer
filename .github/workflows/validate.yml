@@ -17,3 +17,5 @@ jobs:
       - uses: hacs/action@main
         with:
           category: integration
+          # This integration is installed as a custom repository by URL.
+          ignore: brands
