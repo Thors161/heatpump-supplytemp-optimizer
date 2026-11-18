@@ -10,6 +10,29 @@ heating-mode values, curve rounding, equipment limits, room list and model
 coefficients are configured locally. Repository updates never contain a user's
 room names, entity mappings, history or calibration profile.
 
+## Concept and how it works
+
+A weather-compensated heating curve sets the baseline supply-water temperature
+from the outdoor temperature. Cooler water can make a heat pump more efficient,
+provided the heating system can still deliver enough heat to keep rooms comfortable.
+The optimizer uses the configured curve as its starting point and recommends a
+downward adjustment when conditions allow.
+
+1. **Efficiency.** The optimizer checks how close rooms are to their setpoints
+   and monitors water flow rates and return temperatures. When those readings
+   show room to reduce the target, it asks for a small trim.
+2. **Electricity cost.** With a calibrated heat-demand and efficiency model,
+   the optional price method uses tariffs, weather and any configured solar
+   forecast to compare the estimated cost of producing heat now with the typical
+   cost over the next six hours. It can request a reduction when heat is relatively
+   expensive now.
+3. **Final advice.** Every quarter hour, the optimizer starts with the larger of
+   the two requests and applies room comfort, heat-pump capacity, water-flow and
+   timing limits. Changes normally happen in 1°C steps and respect the configured
+   minimum target. Home Assistant shows the **Final reduction**, **Advised target**
+   and the reason for the advice. Any equipment control is handled by an external
+   automation.
+
 ## Requirements and status
 
 - Home Assistant **2026.11.0 or newer**; this beta is tested with 2026.11.0 and Python 3.14.
