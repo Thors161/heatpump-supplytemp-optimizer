@@ -127,6 +127,20 @@ def test_comfort_overrides_price_request(config,states,forecasts):
     assert e.state["effective_reduction"]==0
 
 
+def test_estimated_capacity_status_matches_shared_protection(config, states, forecasts):
+    e = prepare(config, states, forecasts)
+    forecast = e.state["forecast"]
+    heat_demand = forecast["quarters"][0]
+    capacity = config["parameters"]["capacity_kw"]
+    heat_demand["heat_demand_kw"] = capacity - .1
+    assert e.estimated_capacity_reached(NOW) is False
+    heat_demand["heat_demand_kw"] = capacity
+    assert e.estimated_capacity_reached(NOW) is True
+    assert e.decide(NOW)
+    assert e.state["reason"] == "little_estimated_capacity_margin"
+    assert e.estimated_capacity_reached(forecast["valid_until"]) is None
+
+
 def test_dhw_excluded_from_cop_and_pause_negative_heat_included():
     r=Rolling()
     for i in range(31):

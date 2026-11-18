@@ -220,7 +220,9 @@ The button's attributes show the exact filename. Create a dedicated dashboard,
 open its raw configuration editor and paste the file contents. The exported JSON
 is valid YAML. The export does not overwrite an existing dashboard.
 
-Tabs: **Advice · Price · Efficiency · Forecast · History · Settings**.
+Tabs: **Advice · Price · Efficiency · Comfort · Forecast · History · Settings**.
+Advice shows the shared protection states. Comfort shows per-room and maximum
+shortfalls alongside the comfort protection status.
 The exporter resolves actual registered entity IDs, including user renames and
 multiple instances. Re-export after adding/removing rooms or renaming entities.
 Large room graphs are split into groups of eight for native HA card limits.

@@ -158,6 +158,12 @@ class Engine:
             return f"price_level_{self.price_request(now)}"
         return "forecast_stale" if f.get("valid_until", 0) and f["valid_until"] <= now else "forecast_unavailable" if f.get("problems") else "forecast_missing"
 
+    def estimated_capacity_reached(self, now):
+        forecast = self.state["forecast"]
+        if not valid_forecast(forecast, now):
+            return None
+        return forecast["quarters"][0]["heat_demand_kw"] >= self.config["parameters"]["capacity_kw"]
+
     def decide(self, now, *, immediate=False):
         # A normal sample/forecast update cannot move the held command output.
         quarter = int(now//900)
@@ -168,8 +174,8 @@ class Engine:
         if not self.data:
             return False
         s, d, p, f = self.state, self.data, self.config["parameters"], self.state["forecast"]
-        forecast_ok = valid_forecast(f, now)
-        capacity = forecast_ok and f["quarters"][0]["heat_demand_kw"] >= p["capacity_kw"]
+        capacity = self.estimated_capacity_reached(now)
+        forecast_ok = capacity is not None
         if self.hydraulics_ready or not s["enabled"] or not (s["price_enabled"] or s["efficiency_enabled"]):
             s["hold_until"] = 0.
         elif (s["enabled"] and (not s["price_enabled"] or forecast_ok)

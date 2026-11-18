@@ -114,11 +114,14 @@ async def test_dashboard_export_resolves_real_ids_and_native_graphs(hass,config,
     await hass.services.async_call('button','press',{'entity_id':button},blocking=True)
     path=Path(hass.config.path(f'{DOMAIN}_dashboard_{entry.entry_id}.yaml'))
     dashboard=json.loads(path.read_text())
-    assert len(dashboard['views'])==6
+    assert [view['path'] for view in dashboard['views']]==[
+        'advice','price','efficiency','comfort','forecast','history','settings']
     for view in dashboard['views']:
         for section in view['sections']:
             for card in section['cards']:
                 if view['path']!='forecast':assert not card['type'].startswith('custom:')
+                if 'entity' in card:
+                    assert registry.async_get(card['entity']) is not None
                 for row in card.get('entities',[]):
                     assert registry.async_get(row['entity']) is not None
 

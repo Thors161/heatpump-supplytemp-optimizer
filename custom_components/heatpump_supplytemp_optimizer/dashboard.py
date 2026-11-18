@@ -1,4 +1,4 @@
-"""Generate a six-tab dashboard from registered integration entity IDs."""
+"""Generate a dashboard from registered integration entity IDs."""
 P = {"price":"#8b5cf6", "efficiency":"#0d9488", "final":"#f59e0b", "original":"#8b949e", "actual":"#3b82f6"}
 
 
@@ -36,6 +36,14 @@ def build_dashboard(entities, rooms):
             tile("effective_reduction","Final advice",P["final"]),tile("forecast","Forecast"),
             tile("baseline_temperature","Original target",P["original"]),tile("target_temperature","Advised target",P["final"])),
         section("Controls & decisions", *controls, reasons(("decision","Decision"),("price_state","Price"),("efficiency_reason","Efficiency"))),
+        section("Shared protections",
+            tile("comfort_shortfall","Comfort protection"), tile("estimated_capacity_reached","Estimated capacity reached"),
+            tile("hydraulics_ready","Hydraulic history ready"), tile("demand_rising","Radiator demand rising"),
+            tile("heating_mode","Heating mode"), tile("local_outdoor","Local outside temperature"),
+            history("Shared protection history", [
+                ("comfort_shortfall","Comfort protection"), ("estimated_capacity_reached","Estimated capacity reached"),
+                ("hydraulics_ready","Hydraulic history ready"), ("demand_rising","Radiator demand rising"),
+                ("heating_mode","Heating mode")])),
         section("Reduction history",history("Temperature reductions",[("price_reduction","Price request",P["price"]),("efficiency_reduction","Efficiency request",P["efficiency"]),("effective_reduction","Final advice",P["final"])]),
             text("The greater method request passes through shared comfort, capacity, hydraulic and timing checks. Final advice is not proof that equipment applied a command.")),
         section("Target history",history("Heating targets",[("baseline_temperature","Original curve",P["original"]),("target_temperature","Advised target",P["final"]),("actual_target","Actual heat pump",P["actual"])])),
@@ -50,11 +58,19 @@ def build_dashboard(entities, rooms):
         section("Electricity & solar",history("Electricity value · EUR/kWh",[("import_price","Import price",P["price"]),("export_price","Export value",P["original"])]),
             history("PV production · kW",[("pv_power","PV used by advisor","#e4b32c")]),tile("other_load","Other household load")),
         section("COP & calculation inputs",history("Predicted & measured COP",[("original_curve_cop","Original curve",P["original"]),("predicted_cop","Efficiency curve",P["efficiency"]),("measured_cop_30m","Measured, 30 min",P["actual"])]),
-            tile("efficiency_curve_temperature","Efficiency curve"),tile("local_outdoor","Local outside temperature"),
+            tile("efficiency_curve_temperature","Efficiency curve"),
             text("{% set f=state_attr('"+entity("forecast")+"','result') or {} %}**Forecast problems:** {{ f.get('problems',[])|join(', ') or 'none' }}\n\n**PV source:** {{ f.get('pv_source','unknown') }}"))])
     room_rows=[("room_shortfall_"+r["id"],r["name"],color) for r,color in zip(rooms, ["#f59e0b","#3b82f6","#a78bfa","#ec4899","#0d9488"]*(1+len(rooms)//5))]
     # Native history cards support at most eight entities. Split large homes.
     room_graphs=[history("Room shortfalls after allowances"+(f" · {i//8+1}" if len(room_rows)>8 else ""),room_rows[i:i+8]) for i in range(0,len(room_rows),8)]
+    comfort = view("Comfort", "comfort", [
+        section("Room comfort",
+            tile("comfort_shortfall","Comfort protection"), tile("adjusted_room_deficit","Maximum adjusted shortfall"),
+            text("Protection applies to both methods when an included room's adjusted shortfall reaches 0.5°C for 30 minutes. It clears after 10 minutes below 0.5°C."),
+            history("Raw & adjusted maximum shortfall", [
+                ("max_room_deficit","Raw",P["original"]), ("adjusted_room_deficit","After allowances","#dc6676")])),
+        section("Individual rooms", *room_graphs,
+            text("Each room line shows the shortfall after its allowance. Off rooms show zero. Missing readings appear as gaps."))])
     efficiency=view("Efficiency","efficiency",[
         section("Efficiency decision",tile("efficiency_reduction","Efficiency request",P["efficiency"]),tile("adjusted_room_deficit","Adjusted shortfall"),
             reasons(("efficiency_reason","Efficiency"),("decision","Shared decision"))),
@@ -63,9 +79,7 @@ def build_dashboard(entities, rooms):
         section("Flow & demand changes",history("Water flow · L/min",[("primary_flow","Primary flow",P["actual"]),("secondary_flow","Secondary flow",P["efficiency"])]),
             history("Flow change · L/min",[("secondary_flow_change_30m","General, 30 min",P["actual"]),("eligible_secondary_flow_change_30m","Eligible, 30 min",P["efficiency"])]),
             history("Return-gap change · °C",[("return_gap_change_30m","Change, 30 min")]),history("Shortfall change · °C",[("room_deficit_change_30m","Change, 30 min")])),
-        section("Room comfort",*room_graphs,history("Raw & adjusted maximum shortfall",[("max_room_deficit","Raw",P["original"]),("adjusted_room_deficit","After allowances","#dc6676")]),
-            text("Each room line is max(0, setpoint − actual − allowance). Off rooms show zero; missing readings are gaps. Shared comfort protection uses the maximum included shortfall for 30 minutes.")),
-        section("Observation readiness",history("Hydraulic states",[("hydraulics_ready","Hydraulics ready"),("observations_ready","Efficiency ready"),("eligible_heating","Eligible heating"),("demand_rising","Demand rising"),("comfort_shortfall","Comfort protection"),("heating_mode","Heating mode")]),
+        section("Observation readiness",history("Efficiency observations",[("observations_ready","Efficiency ready"),("eligible_heating","Eligible heating")]),
             tile("heat_power","Heat output"),tile("compressor_frequency","Compressor frequency"))])
 
     def forecast_chart(title, unit, series):
@@ -122,5 +136,5 @@ return result;""".replace("FIELD",key)
             text("High gap permits more trim when sustained. Low gap contributes to recovery when secondary flow increases. Require low < high and room margin < recovery. Settings are checked at the next quarter-hour decision.")),
         section("Price · fixed thresholds",text("Comparison: current heat cost minus the next-six-hour median.\n\n| Premium EUR/kWh heat | Request |\n|:--|--:|\n| ≤0.005 | 0°C |\n| >0.005 to 0.010 | 1°C |\n| >0.010 to 0.020 | 2°C |\n| >0.020 to 0.030 | 3°C |\n| >0.030 | 4°C |\n\nThe configured maximum and target floor still apply. Change source mappings, rooms, model, curve and export discount under the integration's configuration options.")),
         section("Shared timing",text("Normal decisions: :00/:15/:30/:45. Enable changes are immediate. One-degree steps are separated by at least 25 minutes. Comfort: adjusted shortfall ≥0.5°C for 30 minutes; release below that threshold for 10 minutes. Hydraulic hold: at most 30 minutes. Settings and source changes do not send equipment commands."))])
-    return dict(title="Heat Pump Optimizer",views=[advice,price,efficiency,forecast,past,settings])
+    return dict(title="Heat Pump Optimizer",views=[advice,price,efficiency,comfort,forecast,past,settings])
 

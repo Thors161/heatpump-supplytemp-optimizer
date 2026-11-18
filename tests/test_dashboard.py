@@ -12,8 +12,8 @@ def generated(count):
 
 def test_large_homes_split_native_room_graphs_at_eight_entities():
     d=generated(20)
-    e=next(v for v in d['views'] if v['path']=='efficiency')
-    charts=[c for s in e['sections'] for c in s['cards'] if c.get('title','').startswith('Room shortfalls')]
+    comfort=next(v for v in d['views'] if v['path']=='comfort')
+    charts=[c for s in comfort['sections'] for c in s['cards'] if c.get('title','').startswith('Room shortfalls')]
     assert [len(c['entities']) for c in charts]==[8,8,4]
     assert len({row['entity'] for c in charts for row in c['entities']})==20
 
