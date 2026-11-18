@@ -23,8 +23,7 @@ room names, entity mappings, history or calibration profile.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.1**. The manifest's repository owner must be filled in before
-publishing. This source tree is not proof of a published Marketplace listing.
+This is **2.0.0-beta.1**. This source tree is not proof of a published Marketplace listing.
 
 ## Installation
 
@@ -235,10 +234,11 @@ For offline testing, `pip download` the requirements on a matching platform,
 then install with `--no-index --find-links /path/to/wheels`. A source-only Python
 dependency may also need setuptools and wheel available during the offline build.
 
-Before publishing, run `python tools/prepare_repository.py YOUR_GITHUB_USER`
-(or organization plus `--maintainer YOUR_GITHUB_USER`). This fills repository URLs
-and codeowners. Run `python tools/check_repository.py --release`, then the test
-suite. The Marketplace source layout is `custom_components/heatpump_optimizer/`
+If you fork or transfer the repository, run `python tools/prepare_repository.py YOUR_GITHUB_USER`
+(or use the organization name with `--maintainer YOUR_GITHUB_USER`) to update the
+manifest's repository URLs and code owners. Before publishing, run
+`python tools/check_repository.py --release`, then the test suite. The Marketplace
+source layout is `custom_components/heatpump_optimizer/`
 with `hacs.json`, tagged versions, CI and a license. Catalog submission is optional.
 
 The repository intentionally omits private profiles, HA `.storage`, source data,
