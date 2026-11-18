@@ -1,6 +1,7 @@
 """Provider adapters and a stateless six-hour, quarter-hour forecast."""
 from datetime import datetime
 from statistics import median
+from homeassistant.util import dt as dt_util
 from .const import FORECAST_SECONDS
 from .model import clamp, curve, predicted_cop, heat_demand, heat_cost
 from .schema import numeric
@@ -60,8 +61,16 @@ def in_interval(rows, at, *, solar=False):
     hits = [v for start, end, v in rows if start <= at < end]
     if hits:
         return hits[-1]
-    if solar and rows and (at < min(s for s, e, v in rows) or at >= max(e for s, e, v in rows)):
-        return 0.
+    if solar:
+        # Providers omit night hours between successive forecast days. Compare
+        # against this local day's daylight envelope, not the whole response.
+        # A completely missing day or a hole inside daylight remains unknown.
+        day = dt_util.as_local(dt_util.utc_from_timestamp(at)).date()
+        daylight = [(s, e, v) for s, e, v in rows
+                    if dt_util.as_local(dt_util.utc_from_timestamp(s)).date() == day]
+        if daylight and (at < min(s for s, e, v in daylight)
+                         or at >= max(e for s, e, v in daylight)):
+            return 0.
     return None
 
 
