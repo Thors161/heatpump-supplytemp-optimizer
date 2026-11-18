@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.storage/
+*.log
+dist/
+*-private-profile.json
+private/
+ha-test-wheels/
+*.tar.gz
+.DS_Store
+

@@ -1,0 +1,14 @@
+{
+  "domain": "heatpump_optimizer",
+  "name": "Heat Pump Supply Temperature Optimizer",
+  "codeowners": [
+    "@Thors161"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/Thors161/heatpump-supplytemp-optimizer",
+  "integration_type": "helper",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/Thors161/heatpump-supplytemp-optimizer/issues",
+  "requirements": [],
+  "version": "2.0.0-beta.1"
+}

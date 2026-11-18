@@ -1,0 +1,342 @@
+{
+  "title": "Heat Pump Supply Temperature Optimizer",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Heat Pump Supply Temperature Optimizer",
+        "description": "Select your local inputs and rooms, or import a private configuration profile. This integration provides advice and never sends equipment commands.",
+        "menu_options": {
+          "setup": "Configure inputs and rooms",
+          "import_profile": "Import local profile"
+        }
+      },
+      "setup": {
+        "title": "Name this optimizer",
+        "data": {
+          "name": "Name"
+        }
+      },
+      "heat_pump": {
+        "title": "Heat pump inputs",
+        "description": "Select measured heat and electrical power separately. Units are validated at runtime; unavailable sensors are retried.",
+        "data": {
+          "heat_power": "Calibrated heat output",
+          "electric_power": "Heat pump electrical power",
+          "backup_power": "Backup heater electrical power (optional)",
+          "supply_temperature": "Heat pump supply temperature",
+          "primary_return": "Primary return temperature",
+          "primary_flow": "Primary water flow",
+          "compressor_frequency": "Compressor frequency",
+          "heating_mode": "Space heating / DHW state",
+          "actual_target": "Actual heat pump target (optional)"
+        }
+      },
+      "hydraulics": {
+        "title": "Radiator circuit inputs",
+        "data": {
+          "secondary_return": "Radiator return temperature",
+          "secondary_flow": "Secondary water flow"
+        }
+      },
+      "environment": {
+        "title": "Outside temperatures and other heat sources",
+        "description": "The heating curve and the demand/COP model can use different outside sensors. Weather is only required for price forecasts.",
+        "data": {
+          "curve_outdoor": "Outside temperature for heating curve",
+          "local_outdoor": "Local outside temperature for COP and demand",
+          "weather": "Weather forecast entity (for price optimization)",
+          "ventilation_power": "Ventilation heat pump electricity (optional)",
+          "stove_temperature": "Stove flue temperature (optional)"
+        }
+      },
+      "electricity": {
+        "title": "Electricity and PV inputs",
+        "description": "Household import/export is used to estimate other load and available PV, not as the heat pump electricity measurement.",
+        "data": {
+          "import_power": "Household grid import power (for price optimization)",
+          "export_power": "Household grid export power (optional)",
+          "pv_power": "Current solar PV power (optional)",
+          "electricity_price": "Current electricity tariff (for price optimization)"
+        }
+      },
+      "providers": {
+        "title": "Forecast providers",
+        "description": "For Forecast.Solar, select one entity from each installation; its integration entry is resolved automatically. Generic forecasts use entity attributes described in the README.",
+        "data": {
+          "price_format": "Price forecast format",
+          "pv_forecast_format": "Solar forecast format",
+          "pv_forecast_entities": "Solar forecast provider entities"
+        }
+      },
+      "curve": {
+        "title": "Heating curve and limits",
+        "data": {
+          "curve_cold_outdoor": "Cold outside temperature (\u00b0C)",
+          "curve_cold_water": "Water target at cold point (\u00b0C)",
+          "curve_warm_outdoor": "Warm outside temperature (\u00b0C)",
+          "curve_warm_water": "Water target at warm point (\u00b0C)",
+          "target_floor": "Minimum target (\u00b0C)",
+          "maximum_reduction": "Maximum reduction (\u00b0C)",
+          "capacity_kw": "Heat-demand capacity protection (kW)",
+          "export_discount": "Export price discount (EUR/kWh)",
+          "space_mode": "Value meaning space heating",
+          "dhw_mode": "Value meaning domestic hot water",
+          "outlet_dhw_fallback": "If mode is missing, assume DHW above 40\u00b0C outlet"
+        }
+      },
+      "model": {
+        "title": "Local heat-demand and COP model",
+        "description": "Defaults are uncalibrated engineering examples. Replace them with your own coefficients and set confirmed to true before enabling price reduction. Keep confirmed false for efficiency-only use.",
+        "data": {
+          "model_json": "Heat-demand and COP model (JSON)"
+        }
+      },
+      "advanced": {
+        "title": "Advanced parameters",
+        "description": "Provider attribute keys, curve rounding, DHW values and equipment limits. No entity names belong in this JSON.",
+        "data": {
+          "parameters_json": "Advanced parameters (JSON)"
+        }
+      },
+      "rooms": {
+        "title": "Rooms",
+        "description": "Add any number of rooms. The list determines the room count.",
+        "menu_options": {
+          "add_room": "Add room",
+          "edit_room": "Edit room",
+          "remove_room": "Remove room",
+          "finish_rooms": "Done with rooms"
+        }
+      },
+      "add_room": {
+        "title": "Add room",
+        "description": "Select either one climate entity OR both separate actual/setpoint entities. {detail}",
+        "data": {
+          "name": "Name",
+          "enabled": "Include this room in comfort checks",
+          "allowance": "Extra allowed shortfall (\u00b0C)",
+          "climate": "Climate entity (or use the two sensors below)",
+          "actual": "Actual room-temperature sensor",
+          "setpoint": "Room setpoint sensor"
+        }
+      },
+      "room_details": {
+        "title": "Edit room",
+        "description": "Room identity and history are preserved when its name changes. {detail}",
+        "data": {
+          "name": "Name",
+          "enabled": "Include this room in comfort checks",
+          "allowance": "Extra allowed shortfall (\u00b0C)",
+          "climate": "Climate entity (or use the two sensors below)",
+          "actual": "Actual room-temperature sensor",
+          "setpoint": "Room setpoint sensor"
+        }
+      },
+      "edit_room": {
+        "title": "Choose room to edit",
+        "data": {
+          "room": "Room"
+        }
+      },
+      "remove_room": {
+        "title": "Choose room to remove",
+        "data": {
+          "room": "Room"
+        }
+      },
+      "finish_rooms": {
+        "title": "Finish rooms"
+      },
+      "finish": {
+        "title": "Save configuration",
+        "description": "{detail}"
+      },
+      "import_profile": {
+        "title": "Import private local profile",
+        "description": "Paste the local JSON profile. Room names, source entities and calibration remain in this HA instance.",
+        "data": {
+          "profile_json": "Local configuration profile (JSON)"
+        }
+      }
+    },
+    "error": {
+      "invalid_configuration": "Invalid configuration. Check the selected entities, room source types, curve limits and JSON values.",
+      "invalid_json": "Enter a valid JSON object using the documented keys."
+    }
+  },
+  "options": {
+    "step": {
+      "user": {
+        "title": "Heat Pump Supply Temperature Optimizer",
+        "description": "Select your local inputs and rooms, or import a private configuration profile. This integration provides advice and never sends equipment commands.",
+        "menu_options": {
+          "setup": "Configure inputs and rooms",
+          "import_profile": "Import local profile"
+        }
+      },
+      "setup": {
+        "title": "Name this optimizer",
+        "data": {
+          "name": "Name"
+        }
+      },
+      "heat_pump": {
+        "title": "Heat pump inputs",
+        "description": "Select measured heat and electrical power separately. Units are validated at runtime; unavailable sensors are retried.",
+        "data": {
+          "heat_power": "Calibrated heat output",
+          "electric_power": "Heat pump electrical power",
+          "backup_power": "Backup heater electrical power (optional)",
+          "supply_temperature": "Heat pump supply temperature",
+          "primary_return": "Primary return temperature",
+          "primary_flow": "Primary water flow",
+          "compressor_frequency": "Compressor frequency",
+          "heating_mode": "Space heating / DHW state",
+          "actual_target": "Actual heat pump target (optional)"
+        }
+      },
+      "hydraulics": {
+        "title": "Radiator circuit inputs",
+        "data": {
+          "secondary_return": "Radiator return temperature",
+          "secondary_flow": "Secondary water flow"
+        }
+      },
+      "environment": {
+        "title": "Outside temperatures and other heat sources",
+        "description": "The heating curve and the demand/COP model can use different outside sensors. Weather is only required for price forecasts.",
+        "data": {
+          "curve_outdoor": "Outside temperature for heating curve",
+          "local_outdoor": "Local outside temperature for COP and demand",
+          "weather": "Weather forecast entity (for price optimization)",
+          "ventilation_power": "Ventilation heat pump electricity (optional)",
+          "stove_temperature": "Stove flue temperature (optional)"
+        }
+      },
+      "electricity": {
+        "title": "Electricity and PV inputs",
+        "description": "Household import/export is used to estimate other load and available PV, not as the heat pump electricity measurement.",
+        "data": {
+          "import_power": "Household grid import power (for price optimization)",
+          "export_power": "Household grid export power (optional)",
+          "pv_power": "Current solar PV power (optional)",
+          "electricity_price": "Current electricity tariff (for price optimization)"
+        }
+      },
+      "providers": {
+        "title": "Forecast providers",
+        "description": "For Forecast.Solar, select one entity from each installation; its integration entry is resolved automatically. Generic forecasts use entity attributes described in the README.",
+        "data": {
+          "price_format": "Price forecast format",
+          "pv_forecast_format": "Solar forecast format",
+          "pv_forecast_entities": "Solar forecast provider entities"
+        }
+      },
+      "curve": {
+        "title": "Heating curve and limits",
+        "data": {
+          "curve_cold_outdoor": "Cold outside temperature (\u00b0C)",
+          "curve_cold_water": "Water target at cold point (\u00b0C)",
+          "curve_warm_outdoor": "Warm outside temperature (\u00b0C)",
+          "curve_warm_water": "Water target at warm point (\u00b0C)",
+          "target_floor": "Minimum target (\u00b0C)",
+          "maximum_reduction": "Maximum reduction (\u00b0C)",
+          "capacity_kw": "Heat-demand capacity protection (kW)",
+          "export_discount": "Export price discount (EUR/kWh)",
+          "space_mode": "Value meaning space heating",
+          "dhw_mode": "Value meaning domestic hot water",
+          "outlet_dhw_fallback": "If mode is missing, assume DHW above 40\u00b0C outlet"
+        }
+      },
+      "model": {
+        "title": "Local heat-demand and COP model",
+        "description": "Defaults are uncalibrated engineering examples. Replace them with your own coefficients and set confirmed to true before enabling price reduction. Keep confirmed false for efficiency-only use.",
+        "data": {
+          "model_json": "Heat-demand and COP model (JSON)"
+        }
+      },
+      "advanced": {
+        "title": "Advanced parameters",
+        "description": "Provider attribute keys, curve rounding, DHW values and equipment limits. No entity names belong in this JSON.",
+        "data": {
+          "parameters_json": "Advanced parameters (JSON)"
+        }
+      },
+      "rooms": {
+        "title": "Rooms",
+        "description": "Add any number of rooms. The list determines the room count.",
+        "menu_options": {
+          "add_room": "Add room",
+          "edit_room": "Edit room",
+          "remove_room": "Remove room",
+          "finish_rooms": "Done with rooms"
+        }
+      },
+      "add_room": {
+        "title": "Add room",
+        "description": "Select either one climate entity OR both separate actual/setpoint entities. {detail}",
+        "data": {
+          "name": "Name",
+          "enabled": "Include this room in comfort checks",
+          "allowance": "Extra allowed shortfall (\u00b0C)",
+          "climate": "Climate entity (or use the two sensors below)",
+          "actual": "Actual room-temperature sensor",
+          "setpoint": "Room setpoint sensor"
+        }
+      },
+      "room_details": {
+        "title": "Edit room",
+        "description": "Room identity and history are preserved when its name changes. {detail}",
+        "data": {
+          "name": "Name",
+          "enabled": "Include this room in comfort checks",
+          "allowance": "Extra allowed shortfall (\u00b0C)",
+          "climate": "Climate entity (or use the two sensors below)",
+          "actual": "Actual room-temperature sensor",
+          "setpoint": "Room setpoint sensor"
+        }
+      },
+      "edit_room": {
+        "title": "Choose room to edit",
+        "data": {
+          "room": "Room"
+        }
+      },
+      "remove_room": {
+        "title": "Choose room to remove",
+        "data": {
+          "room": "Room"
+        }
+      },
+      "finish_rooms": {
+        "title": "Finish rooms"
+      },
+      "finish": {
+        "title": "Save configuration",
+        "description": "{detail}"
+      },
+      "import_profile": {
+        "title": "Import private local profile",
+        "description": "Paste the local JSON profile. Room names, source entities and calibration remain in this HA instance.",
+        "data": {
+          "profile_json": "Local configuration profile (JSON)"
+        }
+      },
+      "init": {
+        "title": "Optimizer configuration",
+        "menu_options": {
+          "heat_pump": "Change source inputs and forecast providers",
+          "rooms": "Manage rooms",
+          "curve": "Heating curve and limits",
+          "model": "Heat-demand and COP model",
+          "advanced": "Advanced parameters",
+          "finish": "Save changes"
+        }
+      }
+    },
+    "error": {
+      "invalid_configuration": "Invalid configuration. Check room sources, curve and threshold ordering.",
+      "invalid_json": "Enter a valid JSON object."
+    }
+  }
+}

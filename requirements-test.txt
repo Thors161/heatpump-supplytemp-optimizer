@@ -1,0 +1,4 @@
+# Download on Linux x86_64 with Python 3.14 for this workspace's offline tests.
+homeassistant==2026.11.0
+pytest
+pytest-asyncio

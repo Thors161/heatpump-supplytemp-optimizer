@@ -1,0 +1,58 @@
+{
+  "version": "2.0.0-beta.1",
+  "checked_at": "2026-11-18T14:30:55.039948+00:00",
+  "home_assistant_test_runtime": "2026.11.0",
+  "python": "3.14.4",
+  "pytest_tests_passed": 34,
+  "pytest_tests_failed": 0,
+  "upstream_warning": "aiohttp HTTP application inheritance deprecation from HA, not an integration failure",
+  "runtime_checks": [
+    "actual HA entry setup",
+    "all five entity platforms",
+    "manual setup wizard",
+    "profile import",
+    "dynamic room options and reload",
+    "last-room deletion rejection",
+    "number and switch persistence across reload",
+    "forecast failure and recovery",
+    "no target updates from ordinary input/number changes",
+    "master disable clears output",
+    "dashboard export through registered button"
+  ],
+  "forecast_javascript": {
+    "graphs": 6,
+    "series": 8,
+    "passed": true
+  },
+  "private_legacy_comparison": {
+    "quarters": 25,
+    "forecast_maximum_absolute_difference": 0.0,
+    "efficiency_scenarios_passed": 432,
+    "private_coefficients_included": false
+  },
+  "public_privacy_check": {
+    "configured_source_ids_absent": true,
+    "configured_room_names_absent": true,
+    "private_fitted_coefficients_absent": true,
+    "private_profile_outside_repository": true
+  },
+  "legacy_package_source_hashes_unchanged": true,
+  "installation": {
+    "installed_in_live_ha": false,
+    "restarted_live_ha": false,
+    "changed_equipment_command_automation": false
+  },
+  "publication": {
+    "local_repository_initialized": true,
+    "github_repository_created": false,
+    "github_owner_known": false,
+    "github_connection_confirmed": false,
+    "hassfest_and_hacs_ci_run": false,
+    "pending": [
+      "GitHub owner and maintainer metadata",
+      "GitHub connection",
+      "remote repository creation/push",
+      "Marketplace CI validation"
+    ]
+  }
+}
