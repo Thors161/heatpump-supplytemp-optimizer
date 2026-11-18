@@ -1,13 +1,13 @@
 from copy import deepcopy
 import json
 import pytest
-from custom_components.heatpump_optimizer.engine import Engine
-from custom_components.heatpump_optimizer.inputs import read_inputs
-from custom_components.heatpump_optimizer.forecast import predict,valid_forecast
-from custom_components.heatpump_optimizer.model import curve,heat_cost,price_level
-from custom_components.heatpump_optimizer.rolling import Rolling
-from custom_components.heatpump_optimizer.schema import validate_config
-from custom_components.heatpump_optimizer.units import convert
+from custom_components.heatpump_supplytemp_optimizer.engine import Engine
+from custom_components.heatpump_supplytemp_optimizer.inputs import read_inputs
+from custom_components.heatpump_supplytemp_optimizer.forecast import predict,valid_forecast
+from custom_components.heatpump_supplytemp_optimizer.model import curve,heat_cost,price_level
+from custom_components.heatpump_supplytemp_optimizer.rolling import Rolling
+from custom_components.heatpump_supplytemp_optimizer.schema import validate_config
+from custom_components.heatpump_supplytemp_optimizer.units import convert
 from conftest import NOW
 
 

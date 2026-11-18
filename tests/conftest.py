@@ -6,8 +6,8 @@ import sys
 import pytest
 
 sys.path.insert(0,str(Path(__file__).parents[1]))
-from custom_components.heatpump_optimizer.const import REQUIRED_ROLES
-from custom_components.heatpump_optimizer.schema import validate_config
+from custom_components.heatpump_supplytemp_optimizer.const import REQUIRED_ROLES
+from custom_components.heatpump_supplytemp_optimizer.schema import validate_config
 
 NOW=datetime(2026,1,15,12,tzinfo=timezone.utc).timestamp()
 

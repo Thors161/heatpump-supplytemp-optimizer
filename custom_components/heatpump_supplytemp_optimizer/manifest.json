@@ -1,5 +1,5 @@
 {
-  "domain": "heatpump_optimizer",
+  "domain": "heatpump_supplytemp_optimizer",
   "name": "Heat Pump Supply Temperature Optimizer",
   "codeowners": [
     "@Thors161"

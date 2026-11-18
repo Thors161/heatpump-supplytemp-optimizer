@@ -19,7 +19,7 @@ def export(package_root,output,state_file=None):
     import importlib.util,types
     parent='profile_schema'
     module=types.ModuleType(parent)
-    module.__path__=[str(ROOT/'custom_components/heatpump_optimizer')]
+    module.__path__=[str(ROOT/'custom_components/heatpump_supplytemp_optimizer')]
     sys.modules[parent]=module
     from importlib import import_module
     validate_config=import_module(parent+'.schema').validate_config

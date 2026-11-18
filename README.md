@@ -62,7 +62,7 @@ Default catalog inclusion is separate from installation by a custom repository U
 
 ### Manual beta installation
 
-1. Copy `custom_components/heatpump_optimizer/` to the HA configuration directory,
+1. Copy `custom_components/heatpump_supplytemp_optimizer/` to the HA configuration directory,
    keeping that directory structure. No package YAML or custom Jinja files are needed.
 2. Restart HA and add the integration as above.
 3. Leave equipment-command automations unchanged while reviewing the advice.
@@ -70,6 +70,10 @@ Default catalog inclusion is separate from installation by a custom repository U
 The integration starts with its master and price switches **off** on first setup.
 Later choices are restored across restart. There is no direct equipment-control
 service, MQTT publisher or hidden actuator path in this integration.
+
+If you installed an earlier beta under the `heatpump_optimizer` domain, set up a
+new integration entry after installing `heatpump_supplytemp_optimizer`. Update
+any automations and dashboards that reference the earlier entry's entities.
 
 ## Configuration
 
@@ -211,7 +215,7 @@ frequency gates efficiency observations, not measured full-cycle COP.
 ## Dashboard
 
 Press the integration's **Export dashboard** button. It writes
-`heatpump_optimizer_dashboard_<entry_id>.yaml` inside the HA configuration folder.
+`heatpump_supplytemp_optimizer_dashboard_<entry_id>.yaml` inside the HA configuration folder.
 The button's attributes show the exact filename. Create a dedicated dashboard,
 open its raw configuration editor and paste the file contents. The exported JSON
 is valid YAML. The export does not overwrite an existing dashboard.
@@ -235,7 +239,7 @@ other graphs are native. Graph history starts when the entities are installed.
    mappings, curve and fitted coefficients stay local. The integration's source
    repository never includes this generated file.
 4. Compare the new advisory sensors. New entities use the generic
-   `heatpump_optimizer` domain/name and do not replace old helper IDs automatically.
+   `heatpump_supplytemp_optimizer` domain. Update any references to old helper IDs.
 5. When deliberately switching an external command automation, use the actual
    registered **Final reduction** sensor and **Advisor enabled** switch. A positive
    reduction still means lowering temperature; the MQTT topic/sign is equipment
@@ -261,7 +265,7 @@ If you fork or transfer the repository, run `python tools/prepare_repository.py 
 (or use the organization name with `--maintainer YOUR_GITHUB_USER`) to update the
 manifest's repository URLs and code owners. Before publishing, run
 `python tools/check_repository.py --release`, then the test suite. The Marketplace
-source layout is `custom_components/heatpump_optimizer/`
+source layout is `custom_components/heatpump_supplytemp_optimizer/`
 with `hacs.json`, tagged versions, CI and a license. Catalog submission is optional.
 
 The repository intentionally omits private profiles, HA `.storage`, source data,

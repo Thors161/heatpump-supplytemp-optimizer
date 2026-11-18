@@ -13,7 +13,7 @@ if __name__=='__main__':
     if not re.fullmatch(r'[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})',args.owner):
         parser.error('Invalid GitHub owner')
     root=Path(__file__).resolve().parents[1]
-    path=root/'custom_components/heatpump_optimizer/manifest.json'
+    path=root/'custom_components/heatpump_supplytemp_optimizer/manifest.json'
     manifest=json.loads(path.read_text())
     url=f'https://github.com/{args.owner}/heatpump-supplytemp-optimizer'
     manifest.update(documentation=url,issue_tracker=url+'/issues',codeowners=['@'+(args.maintainer or args.owner)])

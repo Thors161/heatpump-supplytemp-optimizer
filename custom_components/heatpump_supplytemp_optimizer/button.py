@@ -35,13 +35,13 @@ class OptimizerButton(OptimizerEntity, ButtonEntity):
                 identifiers[key]=entity_id
         config=build_dashboard(identifiers,c.config["rooms"])
         # JSON is valid YAML, including HA's raw dashboard YAML editor.
-        path=Path(self.hass.config.path(f"heatpump_optimizer_dashboard_{c.entry.entry_id}.yaml"))
+        path=Path(self.hass.config.path(f"{DOMAIN}_dashboard_{c.entry.entry_id}.yaml"))
         await self.hass.async_add_executor_job(path.write_text,json.dumps(config,indent=2,ensure_ascii=False)+"\n")
 
     @property
     def extra_state_attributes(self):
         if self.key=="export_dashboard":
-            return {"output_file":f"heatpump_optimizer_dashboard_{self.coordinator.entry.entry_id}.yaml",
+            return {"output_file":f"{DOMAIN}_dashboard_{self.coordinator.entry.entry_id}.yaml",
                     "instructions":"Copy this file into a dedicated dashboard's raw configuration editor. Re-export after changing rooms or entity IDs."}
         return None
 

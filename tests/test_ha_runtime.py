@@ -13,7 +13,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import device_registry as dr, area_registry as ar, frame
 from homeassistant.setup import async_setup_component
 from homeassistant import loader
-from custom_components.heatpump_optimizer.const import DOMAIN
+from custom_components.heatpump_supplytemp_optimizer.const import DOMAIN
 
 
 @pytest.fixture
@@ -112,7 +112,7 @@ async def test_dashboard_export_resolves_real_ids_and_native_graphs(hass,config,
     registry=er.async_get(hass)
     button=registry.async_get_entity_id('button',DOMAIN,entry.entry_id+'_export_dashboard')
     await hass.services.async_call('button','press',{'entity_id':button},blocking=True)
-    path=Path(hass.config.path(f'heatpump_optimizer_dashboard_{entry.entry_id}.yaml'))
+    path=Path(hass.config.path(f'{DOMAIN}_dashboard_{entry.entry_id}.yaml'))
     dashboard=json.loads(path.read_text())
     assert len(dashboard['views'])==6
     for view in dashboard['views']:
@@ -195,7 +195,7 @@ async def test_unconfirmed_model_blocks_price_enable(hass,config,states):
 
 
 async def test_manual_setup_flow_and_last_room_removal_validation(hass,config,states):
-    from custom_components.heatpump_optimizer.config_flow import GROUPS
+    from custom_components.heatpump_supplytemp_optimizer.config_flow import GROUPS
     await seed(hass,config,states)
     result=await hass.config_entries.flow.async_init(DOMAIN,context={'source':'user'})
     flow_id=result['flow_id']

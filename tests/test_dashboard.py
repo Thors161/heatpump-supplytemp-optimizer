@@ -1,6 +1,6 @@
-from custom_components.heatpump_optimizer.dashboard import build_dashboard
-from custom_components.heatpump_optimizer.sensor import SENSORS
-from custom_components.heatpump_optimizer.binary_sensor import DEFINITIONS
+from custom_components.heatpump_supplytemp_optimizer.dashboard import build_dashboard
+from custom_components.heatpump_supplytemp_optimizer.sensor import SENSORS
+from custom_components.heatpump_supplytemp_optimizer.binary_sensor import DEFINITIONS
 
 
 def generated(count):

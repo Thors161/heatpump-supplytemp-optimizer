@@ -15,7 +15,7 @@ def check(release=False,private_profile=None):
     assert len(integrations)==1,'Exactly one custom integration is required'
     path=integrations[0]
     manifest=json.loads((path/'manifest.json').read_text())
-    assert path.name==manifest['domain']=='heatpump_optimizer'
+    assert path.name==manifest['domain']=='heatpump_supplytemp_optimizer'
     assert manifest['config_flow'] is True
     assert manifest['version']=='2.0.0-beta.1'
     assert json.loads((ROOT/'hacs.json').read_text())['homeassistant']=='2026.11.0'

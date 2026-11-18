@@ -15,6 +15,6 @@ jobs:
           python-version: '3.14'
       - run: python tools/check_repository.py --release
       - run: python tools/build_release.py
-      - run: gh release create "$GITHUB_REF_NAME" dist/heatpump_optimizer.zip --prerelease --generate-notes
+      - run: gh release create "$GITHUB_REF_NAME" dist/heatpump_supplytemp_optimizer.zip --prerelease --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}

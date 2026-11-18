@@ -3,7 +3,7 @@
 ## 2.0.0-beta.1
 
 - Convert the advisory package into the manufacturer-independent
-  `heatpump_optimizer` custom integration.
+  `heatpump_supplytemp_optimizer` custom integration.
 - Add local UI source mappings, arbitrary climate/separate-sensor rooms,
   room allowances, model import and reconfiguration.
 - Replace internal input-helper bookkeeping with one saved runtime snapshot.
