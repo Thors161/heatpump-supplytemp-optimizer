@@ -23,9 +23,12 @@ class OptimizerButton(OptimizerEntity, ButtonEntity):
         c = self.coordinator
         registry = er.async_get(self.hass)
         identifiers = {}
-        platform_keys={"sensor":list(SENSORS)+["room_shortfall_"+r["id"] for r in c.config["rooms"]],
+        rooms = c.config["rooms"]
+        platform_keys={"sensor":list(SENSORS)+[prefix+r["id"] for r in rooms
+                                              for prefix in ("room_shortfall_", "room_limited_shortfall_")],
                        "binary_sensor":list(DEFINITIONS),"switch":["enabled","price_enabled","efficiency_enabled"],
-                       "number":["gap_high","gap_low","room_margin","room_recovery"]+["room_allowance_"+r["id"] for r in c.config["rooms"]],
+                       "number":["gap_high","gap_low","room_margin","room_recovery"]+[prefix+r["id"] for r in rooms
+                                              for prefix in ("room_allowance_", "room_max_shortfall_rise_")],
                        "button":["refresh_forecast","export_dashboard"]}
         for platform,keys in platform_keys.items():
             for key in keys:

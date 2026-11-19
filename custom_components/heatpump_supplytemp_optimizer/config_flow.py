@@ -5,7 +5,7 @@ from uuid import uuid4
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
-from .const import DOMAIN, DEFAULT_MODEL, DEFAULT_PARAMETERS, REQUIRED_ROLES
+from .const import DOMAIN, DEFAULT_MODEL, DEFAULT_PARAMETERS, REQUIRED_ROLES, ROOM_SHORTFALL_RISE
 from .schema import validate_config
 
 
@@ -151,10 +151,15 @@ class ConfigurationWizard:
             except ValueError as err:
                 errors["base"] = "invalid_configuration"
                 self._validation_detail = str(err)
+        default_rise, min_rise, max_rise, rise_step, rise_unit = ROOM_SHORTFALL_RISE
         fields = {
             vol.Required("name", default=room["name"]): selector.TextSelector(),
             vol.Required("enabled", default=room["enabled"]): selector.BooleanSelector(),
             vol.Required("allowance", default=room["allowance"]): selector.NumberSelector(selector.NumberSelectorConfig(min=0, max=2, step=.1, mode=selector.NumberSelectorMode.BOX)),
+            vol.Optional("max_shortfall_rise", default=room.get("max_shortfall_rise", default_rise)):
+                selector.NumberSelector(selector.NumberSelectorConfig(
+                    min=min_rise, max=max_rise, step=rise_step, unit_of_measurement=rise_unit,
+                    mode=selector.NumberSelectorMode.BOX)),
         }
         for key, domain in [("climate", "climate"), ("actual", ["sensor", "number", "input_number"]), ("setpoint", ["sensor", "number", "input_number"])]:
             marker = vol.Optional(key, default=room[key]) if room.get(key) else vol.Optional(key)
@@ -239,5 +244,6 @@ class OptimizerOptionsFlow(ConfigurationWizard, config_entries.OptionsFlowWithRe
                 self.working["settings"]=dict(runtime.engine.state["settings"])
                 for room in self.working["rooms"]:
                     room["allowance"]=runtime.engine.state["allowances"].get(room["id"],room["allowance"])
+                    room["max_shortfall_rise"] = runtime.engine.state["shortfall_rise_limits"][room["id"]]
         return self.async_show_menu(step_id="init", menu_options=["heat_pump", "rooms", "curve", "model", "advanced", "finish"])
 

@@ -3,7 +3,7 @@ from copy import deepcopy
 from collections.abc import Mapping
 from math import isfinite
 import re
-from .const import DEFAULT_MODEL, DEFAULT_PARAMETERS, REQUIRED_ROLES, ROLES, SETTINGS
+from .const import DEFAULT_MODEL, DEFAULT_PARAMETERS, REQUIRED_ROLES, ROLES, ROOM_SHORTFALL_RISE, SETTINGS
 
 
 def numeric(value):
@@ -112,6 +112,11 @@ def validate_config(raw):
         if allowance is None or not 0 <= allowance <= 2:
             raise ValueError("invalid_room_allowance")
         room["allowance"] = allowance
+        default, lo, hi, _, _ = ROOM_SHORTFALL_RISE
+        rise = numeric(original.get("max_shortfall_rise", default))
+        if rise is None or not lo <= rise <= hi:
+            raise ValueError("invalid_room_shortfall_rise")
+        room["max_shortfall_rise"] = rise
         config["rooms"].append(room)
     if not config["rooms"] or not any(r["enabled"] for r in config["rooms"]):
         raise ValueError("at_least_one_enabled_room_required")

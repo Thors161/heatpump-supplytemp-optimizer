@@ -51,6 +51,75 @@ def test_room_allowance_changes_guard_without_changing_model_temperature(config,
     assert a["indoor"]==b["indoor"]
 
 
+def test_shortfall_rises_at_each_rooms_rate_and_drops_immediately(config, states):
+    config["rooms"][0].update(max_shortfall_rise=1, allowance=.2)
+    config["rooms"].append({"id": "room_b", "climate": "climate.demo_b", "max_shortfall_rise": .5})
+    config = validate_config(config)
+    states["climate.demo_b"] = deepcopy(states["climate.demo_a"])
+    room_a = states["climate.demo_a"]["attributes"]
+    room_b = states["climate.demo_b"]["attributes"]
+    e = Engine(config, now=NOW)
+    e.sample(states, NOW)
+
+    room_a["temperature"] = 22
+    room_b["current_temperature"] = 18
+    for minute in range(1, 31):
+        e.sample(states, NOW+minute*60)
+    assert e.data["rooms"]["room_a"]["adjusted"] == 1.8
+    assert e.data["rooms"]["room_a"]["limited"] == pytest.approx(.5)
+    assert e.data["rooms"]["room_b"]["adjusted"] == 2
+    assert e.data["rooms"]["room_b"]["limited"] == pytest.approx(.25)
+    assert e.data["max_deficit"] == 2
+    assert e.data["limited_max_deficit"] == .5
+    assert e.data["indoor"] == 19
+    assert e.observations["deficit"]["change"] == pytest.approx(.5)
+    assert not e.comfort
+
+    for minute in range(31, 61):
+        e.sample(states, NOW+minute*60)
+        assert e.comfort is (minute == 60)
+    room_a["temperature"] = 20
+    states["climate.demo_b"]["state"] = "off"
+    e.sample(states, NOW+3601)
+    assert e.data["rooms"]["room_a"]["limited"] == 0
+    assert e.data["rooms"]["room_b"]["limited"] == 0
+    assert e.data["limited_max_deficit"] == 0
+
+
+def test_shortfall_limiter_does_not_credit_restart_or_missing_readings(config, states):
+    e = Engine(config, now=NOW)
+    e.state["shortfall_rise_limits"]["room_a"] = 1
+    room = states["climate.demo_a"]
+    e.sample(states, NOW)
+    room["attributes"]["temperature"] = 22
+    e.sample(states, NOW+60)
+    previous = e.data["rooms"]["room_a"]["limited"]
+    assert previous == pytest.approx(1/60)
+
+    resumed = Engine(config, e.serialize(), now=NOW+3600)
+    resumed.sample(states, NOW+3600)
+    assert resumed.data["rooms"]["room_a"]["limited"] == previous
+    room["state"] = "unavailable"
+    resumed.sample(states, NOW+3630)
+    assert not resumed.data["rooms_ok"]
+    assert resumed.data["rooms"]["room_a"]["limited"] is None
+    room["state"] = "heat"
+    resumed.sample(states, NOW+3660)
+    assert resumed.data["rooms"]["room_a"]["limited"] == previous
+    resumed.sample(states, NOW+3720)
+    assert resumed.data["rooms"]["room_a"]["limited"] == pytest.approx(2/60)
+    resumed.sample(states, NOW+4500)
+    assert resumed.data["rooms"]["room_a"]["limited"] == pytest.approx(2/60)
+
+
+def test_existing_rooms_pass_through_adjusted_shortfall(config, states):
+    e = Engine(config, now=NOW)
+    e.sample(states, NOW)
+    states["climate.demo_a"]["attributes"]["temperature"] = 22
+    e.sample(states, NOW+60)
+    assert e.data["limited_max_deficit"] == e.data["max_deficit"] == 2
+
+
 @pytest.mark.parametrize("value,unit,kind,expected",[(1000,"W","power",1),(.6,"m³/h","flow",10),(68,"°F","temperature",20),(200,"EUR/MWh","price",.2)])
 def test_units(value,unit,kind,expected):
     assert convert(value,unit,kind)==pytest.approx(expected)
@@ -125,6 +194,29 @@ def test_comfort_overrides_price_request(config,states,forecasts):
     e.decide(NOW)
     assert e.state["reason"]=="persistent_room_shortfall"
     assert e.state["effective_reduction"]==0
+
+
+@pytest.mark.parametrize(("gap", "minimum", "flow_change", "trim", "reason"), [
+    (.49, .49, 0., 1, "efficiency_low_gap_recovery"),
+    (.50, .49, 0., 1, "efficiency_low_gap_recovery"),
+    (.51, .49, 0., 2, "efficiency_margin_inconclusive"),
+    (3.10, 2.90, 0., 2, "efficiency_margin_inconclusive"),
+    (3.10, 3.00, 1., 2, "efficiency_margin_inconclusive"),
+    (3.10, 3.00, 0., 3, "efficiency_margin_available"),
+])
+def test_efficiency_gap_limit_changes_only_efficiency_trim(
+        config, states, forecasts, gap, minimum, flow_change, trim, reason):
+    e = prepare(config, states, forecasts)
+    e.state.update(efficiency=2, reduction=4)
+    e.state["settings"].update(gap_low=.5, gap_high=3.)
+    e.state["forecast"]["premium"] = .04
+    e.data["return_gap"] = gap
+    e.observations["eligible_gap"]["minimum"] = minimum
+    e.observations["eligible_flow"]["change"] = flow_change
+    assert e.decide(NOW)
+    assert e.state["efficiency"] == trim
+    assert e.state["efficiency_reason"] == reason
+    assert e.price_request(NOW) == e.state["reduction"] == 4
 
 
 def test_estimated_capacity_status_matches_shared_protection(config, states, forecasts):

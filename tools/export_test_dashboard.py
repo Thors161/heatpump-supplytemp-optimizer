@@ -8,6 +8,6 @@ from custom_components.heatpump_supplytemp_optimizer.sensor import SENSORS
 from custom_components.heatpump_supplytemp_optimizer.binary_sensor import DEFINITIONS
 
 rooms=[{'id':'room_a','name':'Room A'}]
-keys=list(SENSORS)+list(DEFINITIONS)+['enabled','price_enabled','efficiency_enabled','gap_high','gap_low','room_margin','room_recovery','refresh_forecast','export_dashboard','room_allowance_room_a','room_shortfall_room_a']
+keys=list(SENSORS)+list(DEFINITIONS)+['enabled','price_enabled','efficiency_enabled','gap_high','gap_low','room_margin','room_recovery','refresh_forecast','export_dashboard','room_allowance_room_a','room_shortfall_room_a','room_limited_shortfall_room_a','room_max_shortfall_rise_room_a']
 print(json.dumps(build_dashboard({k:'sensor.demo_'+k for k in keys},rooms)))
 

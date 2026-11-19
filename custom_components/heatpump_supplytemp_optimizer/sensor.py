@@ -19,6 +19,7 @@ SENSORS = {
     "price_state": ("Price state", None, None), "forecast": ("Forecast", None, None),
     "max_room_deficit": ("Raw room shortfall", "°C", None),
     "adjusted_room_deficit": ("Adjusted room shortfall", "°C", None),
+    "limited_room_deficit": ("Room shortfall used by optimizer", "°C", None),
     "return_gap": ("Return gap", "°C", None),
     "primary_return": ("Primary return", "°C", "temperature"),
     "secondary_return": ("Secondary return", "°C", "temperature"),
@@ -61,6 +62,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
     c = entry.runtime_data
     entities = [OptimizerSensor(c, key, *definition) for key, definition in SENSORS.items()]
     entities += [RoomShortfallSensor(c, room) for room in c.config["rooms"]]
+    entities += [RoomShortfallSensor(c, room, limited=True) for room in c.config["rooms"]]
     async_add_entities(entities)
 
 
@@ -104,6 +106,8 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
             return s["forecast"].get(FORECAST_KEYS[key]) if valid_forecast(s["forecast"], now) else None
         if key == "adjusted_room_deficit":
             return d.get("max_deficit") if d.get("rooms_ok") else None
+        if key == "limited_room_deficit":
+            return d.get("limited_max_deficit") if d.get("rooms_ok") else None
         if key == "max_room_deficit":
             return d.get("raw_max_deficit") if d.get("rooms_ok") else None
         observations = {"secondary_flow_change_30m": ("flow", "change"), "return_gap_change_30m": ("gap", "change"),
@@ -151,13 +155,16 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
 
 
 class RoomShortfallSensor(OptimizerSensor):
-    def __init__(self, coordinator, room):
+    def __init__(self, coordinator, room, *, limited=False):
         self.room = room
-        super().__init__(coordinator, "room_shortfall_"+room["id"], room["name"]+" shortfall", "°C", None)
+        self.field = "limited" if limited else "adjusted"
+        prefix = "room_limited_shortfall_" if limited else "room_shortfall_"
+        label = " shortfall used by optimizer" if limited else " shortfall"
+        super().__init__(coordinator, prefix+room["id"], room["name"]+label, "°C", None)
 
     @property
     def native_value(self):
-        return self.coordinator.engine.data.get("rooms", {}).get(self.room["id"], {}).get("adjusted")
+        return self.coordinator.engine.data.get("rooms", {}).get(self.room["id"], {}).get(self.field)
 
     @property
     def extra_state_attributes(self):

@@ -47,8 +47,10 @@ DESCRIPTIONS = {'advice_disabled': 'The advisor is disabled; final reduction is 
                                        'efficiency request is held.',
  'efficiency_waiting_for_forecast': 'Price reduction is enabled and its forecast is unavailable; '
                                     'efficiency holds its current request.',
- 'efficiency_demand_recovery': 'Room shortfall, sustained rising demand, or increasing secondary '
-                               'flow with a low gap requests one degree less efficiency reduction.',
+ 'efficiency_demand_recovery': 'Room shortfall or sustained rising demand requests one degree less '
+                               'efficiency reduction.',
+ 'efficiency_low_gap_recovery': 'The current return gap is at or below the low limit. Efficiency '
+                                'requests one degree less reduction.',
  'efficiency_room_margin_insufficient': 'Room shortfall is above the efficiency margin or is '
                                         'increasing too quickly; no further reduction is '
                                         'requested.',

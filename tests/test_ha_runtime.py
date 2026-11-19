@@ -134,6 +134,8 @@ async def test_switch_and_number_persist_across_unload_reload(hass,config,states
     registry=er.async_get(hass)
     number=registry.async_get_entity_id('number',DOMAIN,entry.entry_id+'_room_allowance_room_a')
     await hass.services.async_call('number','set_value',{'entity_id':number,'value':.7},blocking=True)
+    rise_limit=registry.async_get_entity_id('number',DOMAIN,entry.entry_id+'_room_max_shortfall_rise_room_a')
+    await hass.services.async_call('number','set_value',{'entity_id':rise_limit,'value':1.0},blocking=True)
     switch=registry.async_get_entity_id('switch',DOMAIN,entry.entry_id+'_enabled')
     await hass.services.async_call('switch','turn_on',{'entity_id':switch},blocking=True)
     await hass.config_entries.async_reload(entry.entry_id)
@@ -141,6 +143,8 @@ async def test_switch_and_number_persist_across_unload_reload(hass,config,states
     assert entry.runtime_data.engine.state['enabled'] is True
     assert entry.runtime_data.engine.state['allowances']['room_a']==.7
     assert hass.states.get(number).state=='0.7'
+    assert entry.runtime_data.engine.state['shortfall_rise_limits']['room_a']==1.0
+    assert float(hass.states.get(rise_limit).state)==1.0
 
 
 async def test_state_and_parameter_updates_do_not_recalculate_between_boundaries(hass,config,states):

@@ -8,7 +8,7 @@ from homeassistant.helpers.event import async_track_state_change_event, async_tr
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
-from .const import DOMAIN, STORAGE_VERSION, SETTINGS
+from .const import DOMAIN, ROOM_SHORTFALL_RISE, STORAGE_VERSION, SETTINGS
 from .engine import Engine
 from .forecast import predict, valid_forecast
 from .schema import validate_config
@@ -178,11 +178,12 @@ class OptimizerCoordinator(DataUpdateCoordinator):
             await self.store.async_save(self.engine.serialize())
             self.publish()
 
-    async def async_set_number(self, key, value, room_id=None):
+    async def async_set_number(self, key, value, room_id=None, room_setting="allowances"):
         if room_id:
-            if not 0 <= value <= 2:
-                raise ValueError("Room allowance must be between 0 and 2°C")
-            self.engine.state["allowances"][room_id] = value
+            lo, hi = ROOM_SHORTFALL_RISE[1:3] if room_setting == "shortfall_rise_limits" else (0, 2)
+            if not lo <= value <= hi:
+                raise ValueError("Room setting is outside its supported range")
+            self.engine.state[room_setting][room_id] = value
         else:
             default, lo, hi, step, unit = SETTINGS[key]
             if not lo <= value <= hi:

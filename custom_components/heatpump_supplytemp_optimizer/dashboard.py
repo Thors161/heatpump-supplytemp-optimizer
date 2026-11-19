@@ -60,19 +60,24 @@ def build_dashboard(entities, rooms):
         section("COP & calculation inputs",history("Predicted & measured COP",[("original_curve_cop","Original curve",P["original"]),("predicted_cop","Efficiency curve",P["efficiency"]),("measured_cop_30m","Measured, 30 min",P["actual"])]),
             tile("efficiency_curve_temperature","Efficiency curve"),
             text("{% set f=state_attr('"+entity("forecast")+"','result') or {} %}**Forecast problems:** {{ f.get('problems',[])|join(', ') or 'none' }}\n\n**PV source:** {{ f.get('pv_source','unknown') }}"))])
-    room_rows=[("room_shortfall_"+r["id"],r["name"],color) for r,color in zip(rooms, ["#f59e0b","#3b82f6","#a78bfa","#ec4899","#0d9488"]*(1+len(rooms)//5))]
-    # Native history cards support at most eight entities. Split large homes.
-    room_graphs=[history("Room shortfalls after allowances"+(f" · {i//8+1}" if len(room_rows)>8 else ""),room_rows[i:i+8]) for i in range(0,len(room_rows),8)]
+    def room_graphs(title, prefix):
+        colors = ["#f59e0b", "#3b82f6", "#a78bfa", "#ec4899", "#0d9488"]
+        rows = [(prefix+room["id"], room["name"], colors[i % len(colors)]) for i, room in enumerate(rooms)]
+        # Native history cards support at most eight entities.
+        return [history(title+(f" · {i//8+1}" if len(rows)>8 else ""), rows[i:i+8])
+                for i in range(0, len(rows), 8)]
     comfort = view("Comfort", "comfort", [
         section("Room comfort",
-            tile("comfort_shortfall","Comfort protection"), tile("adjusted_room_deficit","Maximum adjusted shortfall"),
-            text("Protection applies to both methods when an included room's adjusted shortfall reaches 0.5°C for 30 minutes. It clears after 10 minutes below 0.5°C."),
-            history("Raw & adjusted maximum shortfall", [
-                ("max_room_deficit","Raw",P["original"]), ("adjusted_room_deficit","After allowances","#dc6676")])),
-        section("Individual rooms", *room_graphs,
-            text("Each room line shows the shortfall after its allowance. Off rooms show zero. Missing readings appear as gaps."))])
+            tile("comfort_shortfall","Comfort protection"), tile("limited_room_deficit","Maximum shortfall used"),
+            text("Protection applies to both methods when the shortfall used by the optimizer is at least 0.5°C for 30 minutes. It clears after 10 minutes below 0.5°C."),
+            history("Maximum room shortfall", [
+                ("max_room_deficit","Raw",P["original"]), ("adjusted_room_deficit","After allowances","#dc6676"),
+                ("limited_room_deficit","Used by optimizer",P["actual"])])),
+        section("Adjusted shortfalls", *room_graphs("Room shortfalls after allowances", "room_shortfall_")),
+        section("Shortfalls used by optimizer", *room_graphs("Room shortfalls used by optimizer", "room_limited_shortfall_"),
+            text("Configured rise limits slow increases. Decreases apply immediately. Off rooms show zero and missing readings appear as gaps."))])
     efficiency=view("Efficiency","efficiency",[
-        section("Efficiency decision",tile("efficiency_reduction","Efficiency request",P["efficiency"]),tile("adjusted_room_deficit","Adjusted shortfall"),
+        section("Efficiency decision",tile("efficiency_reduction","Efficiency request",P["efficiency"]),tile("limited_room_deficit","Shortfall used by optimizer"),
             reasons(("efficiency_reason","Efficiency"),("decision","Shared decision"))),
         section("Return temperatures & gap",history("Return temperatures",[("primary_return","Primary return",P["actual"]),("secondary_return","Secondary return",P["efficiency"])]),
             history("Return gap · °C",[("return_gap","Current gap",P["actual"]),("efficiency_gap_min_30m","Eligible minimum",P["efficiency"]),("gap_high","High gap",P["final"]),("gap_low","Low gap",P["original"])],min_y_axis=-10,max_y_axis=10,fit_y_data=False)),
@@ -131,10 +136,11 @@ return result;""".replace("FIELD",key)
     settings=view("Settings","settings",[
         section("General",*controls,tile("refresh_forecast","Refresh forecast"),tile("export_dashboard","Export dashboard")),
         section("Room comfort · both methods",editable("Extra allowed shortfall",[("room_allowance_"+r["id"],r["name"]) for r in rooms]),
-            text("Increasing a room allowance tolerates a larger shortfall in that room. Allowances apply all day, including scheduled warm-up. Actual temperatures remain the demand-model inputs.")),
+            editable("Maximum shortfall rise",[("room_max_shortfall_rise_"+r["id"],r["name"]) for r in rooms]),
+            text("The allowance is subtracted before limiting the rise. Set a room's rise limit to 0 to disable it. A limit of 1°C/h allows up to 0.5°C of increase in 30 minutes. The demand model uses actual room temperatures.")),
         section("Efficiency · adjustable",editable("Hydraulic & comfort thresholds",[("gap_high","High gap"),("gap_low","Low gap"),("room_margin","Room margin for more trim"),("room_recovery","Room shortfall for recovery")]),
-            text("High gap permits more trim when sustained. Low gap contributes to recovery when secondary flow increases. Require low < high and room margin < recovery. Settings are checked at the next quarter-hour decision.")),
+            text("A sustained gap at or above the high limit permits more trim when secondary flow is steady or falling. A current gap at or below the low limit backs off efficiency trim. Require low < high and room margin < recovery.")),
         section("Price · fixed thresholds",text("Comparison: current heat cost minus the next-six-hour median.\n\n| Premium EUR/kWh heat | Request |\n|:--|--:|\n| ≤0.005 | 0°C |\n| >0.005 to 0.010 | 1°C |\n| >0.010 to 0.020 | 2°C |\n| >0.020 to 0.030 | 3°C |\n| >0.030 | 4°C |\n\nThe configured maximum and target floor still apply. Change source mappings, rooms, model, curve and export discount under the integration's configuration options.")),
-        section("Shared timing",text("Normal decisions: :00/:15/:30/:45. Enable changes are immediate. One-degree steps are separated by at least 25 minutes. Comfort: adjusted shortfall ≥0.5°C for 30 minutes; release below that threshold for 10 minutes. Hydraulic hold: at most 30 minutes. Settings and source changes do not send equipment commands."))])
+        section("Shared timing",text("Normal decisions: :00/:15/:30/:45. Enable changes are immediate. One-degree steps are separated by at least 25 minutes. Comfort requires a shortfall of at least 0.5°C for 30 minutes and clears after 10 minutes below that level. Hydraulic hold lasts at most 30 minutes. Settings and source changes take effect at the next normal decision."))])
     return dict(title="Heat Pump Optimizer",views=[advice,price,efficiency,comfort,forecast,past,settings])
 

@@ -1,7 +1,7 @@
 """Advisory state machine. Never sends commands to heating equipment."""
 from copy import deepcopy
 from math import floor
-from .const import MIN_STEP_SECONDS, SETTINGS, SNAPSHOT_VERSION
+from .const import MAX_SAMPLE_GAP, MIN_STEP_SECONDS, ROOM_SHORTFALL_RISE, SETTINGS, SNAPSHOT_VERSION
 from .forecast import valid_forecast
 from .inputs import read_inputs
 from .model import clamp, curve, price_level
@@ -13,12 +13,15 @@ class Engine:
     def __init__(self, config, saved=None, now=0):
         self.config = config
         saved = saved if isinstance(saved, dict) and saved.get("version") == SNAPSHOT_VERSION else {}
+        default_rise, rise_low, rise_high, _, _ = ROOM_SHORTFALL_RISE
+        default_rises = {room["id"]: room.get("max_shortfall_rise", default_rise) for room in config["rooms"]}
         self.state = dict(version=SNAPSHOT_VERSION, enabled=False, price_enabled=False,
                           efficiency_enabled=True, reduction=0, efficiency=0,
                           effective_reduction=0, target=None, baseline=None,
                           changed=0., efficiency_changed=0., hold_until=0.,
                           reason="startup_waiting_for_decision", efficiency_reason="startup_waiting_for_observations",
                           pv_cache={}, settings=dict(config["settings"]), allowances={},
+                          shortfall_rise_limits={}, limited_shortfalls={},
                           forecast={}, power_history={}, predictions={},
                           default_settings=dict(config["settings"]),
                           default_allowances={r["id"]: r["allowance"] for r in config["rooms"]})
@@ -31,7 +34,8 @@ class Engine:
             self.state[key] = int(clamp(numeric(self.state[key]) or 0, 0, config["parameters"]["maximum_reduction"]))
         for key in ["changed", "efficiency_changed", "hold_until"]:
             self.state[key] = numeric(self.state[key]) or 0.
-        for key in ["pv_cache", "settings", "allowances", "forecast", "power_history", "predictions"]:
+        for key in ["pv_cache", "settings", "allowances", "shortfall_rise_limits", "limited_shortfalls",
+                    "forecast", "power_history", "predictions"]:
             if not isinstance(self.state[key], dict):
                 self.state[key] = {}
         for key, default in config["settings"].items():
@@ -47,6 +51,22 @@ class Engine:
             self.state["allowances"][rid] = clamp(self.state["allowances"][rid], 0, 2)
         self.state["default_allowances"] = {r["id"]: r["allowance"] for r in config["rooms"]}
         self.state["allowances"] = {rid:self.state["allowances"][rid] for rid in self.state["default_allowances"]}
+        saved_rise_defaults = saved.get("default_shortfall_rise_limits", {})
+        if not isinstance(saved_rise_defaults, dict):
+            saved_rise_defaults = {}
+        rates = {}
+        limited = {}
+        for rid, default in default_rises.items():
+            saved_rate = numeric(self.state["shortfall_rise_limits"].get(rid))
+            if saved_rate is None or saved_rise_defaults.get(rid, default) != default:
+                saved_rate = default
+            rates[rid] = clamp(saved_rate, rise_low, rise_high)
+            value = numeric(self.state["limited_shortfalls"].get(rid))
+            if value is not None and value >= 0:
+                limited[rid] = value
+        self.state.update(shortfall_rise_limits=rates, limited_shortfalls=limited,
+                          default_shortfall_rise_limits=default_rises)
+        self._shortfall_sample_times = {}
         self.general = Rolling(saved.get("samples", []))
         # An outage must not be interpolated as a measured heating interval.
         self.power = Rolling()
@@ -70,6 +90,7 @@ class Engine:
 
     def sample(self, states, now):
         d = self.data = read_inputs(self.config, states, now, self.state["pv_cache"], self.state["allowances"])
+        self._limit_room_shortfalls(now)
         self.space_since = (self.space_since if self.space_since is not None else now) if d["space_ok"] else None
         self.learning_since = (self.learning_since if self.learning_since is not None else now) if d["learning_ok"] else None
         self.power.add(now, {"heat": d["heat_power"] if d["cop_ok"] else None,
@@ -81,7 +102,7 @@ class Engine:
                 gap=d["return_gap"] if d["space_ok"] else None,
                 eligible_gap=d["return_gap"] if d["learning_ok"] else None,
                 eligible_flow=d["secondary_flow"] if d["learning_ok"] else None,
-                deficit=d["max_deficit"] if d["rooms_ok"] and d["space_mode"] else None,
+                deficit=d["limited_max_deficit"] if d["rooms_ok"] and d["space_mode"] else None,
                 other=d["other_power"]))
             self.last_sample_minute = minute
         self.observations = {k: self.general.changes(k, now) for k in ["flow", "gap", "eligible_gap", "eligible_flow", "deficit"]}
@@ -89,7 +110,7 @@ class Engine:
                                 and all(self.observations[k]["ready"] for k in ["flow", "gap"]))
         self.observations_ready = (self.learning_since is not None and now-self.learning_since >= 300
                                   and all(self.observations[k]["ready"] for k in ["eligible_gap", "eligible_flow", "deficit"]))
-        shortfall = not d["rooms_ok"] or d["max_deficit"] >= .5
+        shortfall = not d["rooms_ok"] or d["limited_max_deficit"] >= .5
         if shortfall:
             self.comfort_clear_since = None
             self.comfort_since = self.comfort_since if self.comfort_since is not None else now
@@ -112,6 +133,29 @@ class Engine:
             self.demand_clear_since = self.demand_clear_since if self.demand_clear_since is not None else now
             if now-self.demand_clear_since >= 300:
                 self.demand_rising = False
+
+    def _limit_room_shortfalls(self, now):
+        values = self.state["limited_shortfalls"]
+        rates = self.state["shortfall_rise_limits"]
+        times = self._shortfall_sample_times
+        maximum = 0.
+        for rid, room in self.data["rooms"].items():
+            adjusted = room["adjusted"]
+            room["limited"] = adjusted
+            if adjusted is None:
+                times.pop(rid, None)
+                continue
+            previous_time = times.get(rid, now)
+            elapsed = now - previous_time
+            times[rid] = max(now, previous_time)
+            if rates[rid] > 0 and rid in values:
+                # Only credit time between consecutive valid samples.
+                hours = elapsed / 3600 if 0 <= elapsed <= MAX_SAMPLE_GAP else 0.
+                room["limited"] = min(adjusted, values[rid] + rates[rid] * hours)
+            values[rid] = room["limited"]
+            if room["included"]:
+                maximum = max(maximum, room["limited"])
+        self.data["limited_max_deficit"] = round(maximum, 6)
 
     def _update_power_history(self, now):
         h, d = self.state["power_history"], self.data
@@ -246,10 +290,11 @@ class Engine:
             reason = "efficiency_observations_warming_up"
         elif s["price_enabled"] and not forecast_ok:
             reason = "efficiency_waiting_for_forecast"
-        elif (d["max_deficit"] >= cfg["room_recovery"]-.000001 or self.demand_rising
-              or (obs["eligible_flow"]["change"] >= 5/6 and d["return_gap"] <= cfg["gap_low"])):
+        elif d["limited_max_deficit"] >= cfg["room_recovery"]-.000001 or self.demand_rising:
             wanted, reason = max(0, current-1), "efficiency_demand_recovery"
-        elif d["max_deficit"] > cfg["room_margin"]+.000001 or obs["deficit"]["change"] > .1+.000001:
+        elif d["return_gap"] <= cfg["gap_low"]:
+            wanted, reason = max(0, current-1), "efficiency_low_gap_recovery"
+        elif d["limited_max_deficit"] > cfg["room_margin"]+.000001 or obs["deficit"]["change"] > .1+.000001:
             reason = "efficiency_room_margin_insufficient"
         elif obs["eligible_gap"]["minimum"] < cfg["gap_high"] or obs["eligible_flow"]["change"] > 0:
             reason = "efficiency_margin_inconclusive"

@@ -26,6 +26,7 @@ SETTINGS = {
     "room_margin": (.2, 0, 1, .1, "°C"),
     "room_recovery": (.4, 0, 2, .1, "°C"),
 }
+ROOM_SHORTFALL_RISE = (0., 0., 10., .1, "°C/h")
 DEFAULT_PARAMETERS = {
     "curve_cold_outdoor": -10., "curve_cold_water": 40.,
     "curve_warm_outdoor": 15., "curve_warm_water": 28.,

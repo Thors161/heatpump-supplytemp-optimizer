@@ -113,8 +113,8 @@ the explicit mode is unknown**. It is off by default.
 ### Rooms
 
 Use the integration's **Configure** options to add, edit or remove any number of
-rooms. Each room has a stable internal ID, display name, inclusion switch and
-extra allowed shortfall. Select either:
+rooms. Each room has a stable internal ID, display name, inclusion switch,
+extra allowed shortfall and maximum shortfall rise. Select either:
 
 - one climate entity with `current_temperature` and `temperature` attributes; or
 - two separate actual-temperature and setpoint entities.
@@ -124,9 +124,16 @@ sync. Names can change without changing a room's identity or recorded history.
 
 `adjusted shortfall = max(0, setpoint − actual − allowance)`
 
-Allowances range from 0–2°C, in 0.1°C steps. They apply all day, including scheduled
-warm-up. They affect efficiency checks, the shortfall trend and shared comfort
-protection. They do not alter the actual temperatures used by the demand model.
+Allowances range from 0–2°C in 0.1°C steps and apply all day. The optional
+maximum shortfall rise ranges from 0–10°C/h in 0.1°C/h steps. With the default
+of 0, the adjusted shortfall passes through as calculated. At 1°C/h it can
+rise by up to 0.5°C in 30 minutes, whether a setpoint increased or a room cooled.
+Decreases apply immediately. The last limited value is restored after restart
+without counting downtime toward allowed growth.
+
+The largest limited shortfall among included rooms feeds the efficiency checks,
+shortfall trend and shared comfort protection. The demand model still uses actual
+room temperatures. The Comfort dashboard shows both values for each room.
 An off climate room contributes zero shortfall. A missing included room invalidates
 comfort/forecast inputs; an excluded room does not veto comfort checks. Available
 actual temperatures of all configured rooms remain eligible for the indoor mean.
@@ -196,9 +203,12 @@ Negative prices and export opportunity costs are retained.
   immediate decisions. Source/forecast/number updates do not move the held output.
 - Reductions progress by one degree, with a minimum 25 minutes between steps.
 - The final request is the greater of price and efficiency, not their sum.
-- Shared comfort protection requests zero after adjusted shortfall ≥0.5°C for
+- Shared comfort protection requests zero after the shortfall used by the optimizer is ≥0.5°C for
   30 minutes; release needs ten minutes below that level. Missing rooms are
   also explicitly rejected by the decision rules.
+- Efficiency backs off trim when the current return gap is at or below its low
+  limit. More trim requires the lowest eligible gap over 30 minutes to reach
+  the high limit and eligible secondary flow to be steady or falling.
 - Hydraulic hold is bounded to 30 minutes and is not extended by repeated checks.
 - Settings, method levels, held targets, change times, cache timestamps and matched
   pre-quarter predictions are stored in one integration-owned HA storage record.
