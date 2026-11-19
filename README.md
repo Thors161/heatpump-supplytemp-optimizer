@@ -19,7 +19,7 @@ The optimizer uses the configured curve as its starting point and recommends a
 downward adjustment when conditions allow.
 
 1. **Efficiency.** The optimizer checks how close rooms are to their setpoints
-   and monitors water flow rates and return temperatures. When those readings
+   and monitors primary flow and the return-temperature gap. When those readings
    show room to reduce the target, it asks for a small trim.
 2. **Electricity cost.** With a calibrated heat-demand and efficiency model,
    the optional price method uses tariffs, weather and any configured solar
@@ -27,8 +27,8 @@ downward adjustment when conditions allow.
    cost over the next six hours. It can request a reduction when heat is relatively
    expensive now.
 3. **Final advice.** Every quarter hour, the optimizer starts with the larger of
-   the two requests and applies room comfort, heat-pump capacity, water-flow and
-   timing limits. Changes normally happen in 1°C steps and respect the configured
+   the two requests and applies room comfort, heat-pump capacity, hydraulic
+   readiness and timing checks. Changes normally happen in 1°C steps and respect the configured
    minimum target. Home Assistant shows the **Final reduction**, **Advised target**
    and the reason for the advice. Any equipment control is handled by an external
    automation.
@@ -37,7 +37,7 @@ downward adjustment when conditions allow.
 
 - Home Assistant **2026.11.0 or newer**; this beta is tested with 2026.11.0 and Python 3.14.
 - A calibrated heat-output power sensor and a dedicated heat-pump electricity sensor.
-- Primary/secondary flow and return-temperature measurements for efficiency trim.
+- Primary flow and both return-temperature measurements for efficiency trim.
 - At least one room with a setpoint and actual temperature.
 - Price optimization additionally needs a configured demand/COP model, current
   tariff, price forecast, weather forecast and household import power.
@@ -80,11 +80,13 @@ any automations and dashboards that reference the earlier entry's entities.
 Setup groups inputs into Heat pump, Hydraulics, Environment and Electricity.
 Optional selectors may be left empty. Missing configured inputs remain visible
 in diagnostic reasons; startup sensor availability is retried automatically.
+On update, Home Assistant removes the retired secondary-flow mapping from saved
+integration entries. Remove that mapping from older profiles before importing them.
 
 | Group | Inputs |
 |---|---|
 | Heat pump | Heat output, electrical power, optional backup-heater power, supply, primary return, primary flow, compressor frequency, heating-mode state, optional actual target |
-| Hydraulics | Secondary return and secondary flow |
+| Hydraulics | Secondary return temperature |
 | Environment | Separate curve and local outside temperatures; optional weather, ventilation heat-pump electricity and stove temperature |
 | Electricity | Optional household import/export power, PV power and current tariff; required when their price-forecast function is used |
 
@@ -208,7 +210,7 @@ Negative prices and export opportunity costs are retained.
   also explicitly rejected by the decision rules.
 - Efficiency backs off trim when the current return gap is at or below its low
   limit. More trim requires the lowest eligible gap over 30 minutes to reach
-  the high limit and eligible secondary flow to be steady or falling.
+  the high limit.
 - Hydraulic hold is bounded to 30 minutes and is not extended by repeated checks.
 - Settings, method levels, held targets, change times, cache timestamps and matched
   pre-quarter predictions are stored in one integration-owned HA storage record.

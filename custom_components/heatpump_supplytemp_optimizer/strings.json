@@ -34,8 +34,7 @@
       "hydraulics": {
         "title": "Radiator circuit inputs",
         "data": {
-          "secondary_return": "Radiator return temperature",
-          "secondary_flow": "Secondary water flow"
+          "secondary_return": "Radiator return temperature"
         }
       },
       "environment": {
@@ -200,8 +199,7 @@
       "hydraulics": {
         "title": "Radiator circuit inputs",
         "data": {
-          "secondary_return": "Radiator return temperature",
-          "secondary_flow": "Secondary water flow"
+          "secondary_return": "Radiator return temperature"
         }
       },
       "environment": {

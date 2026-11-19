@@ -196,23 +196,24 @@ def test_comfort_overrides_price_request(config,states,forecasts):
     assert e.state["effective_reduction"]==0
 
 
-@pytest.mark.parametrize(("gap", "minimum", "flow_change", "trim", "reason"), [
+@pytest.mark.parametrize(("gap", "minimum", "shortfall", "trim", "reason"), [
     (.49, .49, 0., 1, "efficiency_low_gap_recovery"),
     (.50, .49, 0., 1, "efficiency_low_gap_recovery"),
     (.51, .49, 0., 2, "efficiency_margin_inconclusive"),
     (3.10, 2.90, 0., 2, "efficiency_margin_inconclusive"),
-    (3.10, 3.00, 1., 2, "efficiency_margin_inconclusive"),
     (3.10, 3.00, 0., 3, "efficiency_margin_available"),
+    (3.10, 3.00, .4, 1, "efficiency_room_shortfall_recovery"),
 ])
 def test_efficiency_gap_limit_changes_only_efficiency_trim(
-        config, states, forecasts, gap, minimum, flow_change, trim, reason):
+        config, states, forecasts, gap, minimum, shortfall, trim, reason):
     e = prepare(config, states, forecasts)
     e.state.update(efficiency=2, reduction=4)
     e.state["settings"].update(gap_low=.5, gap_high=3.)
     e.state["forecast"]["premium"] = .04
     e.data["return_gap"] = gap
+    e.data["limited_max_deficit"] = shortfall
     e.observations["eligible_gap"]["minimum"] = minimum
-    e.observations["eligible_flow"]["change"] = flow_change
+    assert e.hydraulics_ready and e.observations_ready
     assert e.decide(NOW)
     assert e.state["efficiency"] == trim
     assert e.state["efficiency_reason"] == reason

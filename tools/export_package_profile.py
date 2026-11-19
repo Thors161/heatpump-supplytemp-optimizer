@@ -38,7 +38,7 @@ def export(package_root,output,state_file=None):
     mapping={'curve_outdoor':'curve_outdoor','local_outdoor':'outdoor','heat_power':'heat_kw',
         'electric_power':'hp_w','backup_power':'heater_w','supply_temperature':'hp_supply',
         'primary_return':'hp_return','secondary_return':'rad_return','primary_flow':'primary_flow',
-        'secondary_flow':'rad_flow','compressor_frequency':'compressor_hz','heating_mode':'valve',
+        'compressor_frequency':'compressor_hz','heating_mode':'valve',
         'actual_target':'actual_target','import_power':'grid_in','export_power':'grid_out',
         'ventilation_power':'ecol_w','stove_temperature':'flue'}
     inputs={role:variables[var] for role,var in mapping.items() if var in variables}

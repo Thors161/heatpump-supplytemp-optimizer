@@ -29,7 +29,6 @@ DESCRIPTIONS = {'advice_disabled': 'The advisor is disabled; final reduction is 
                            'towards zero reduction.',
  'hydraulic_history_warming_up': 'Hydraulic history is not ready; the advisor requests zero '
                                  'reduction.',
- 'radiator_demand_rising': 'Sustained rising radiator demand limits the combined reduction.',
  'outdoor_temperature_invalid': 'The heat pump outside reading is missing or invalid; a new target '
                                 'cannot be calculated.',
  'efficiency_disabled': 'Efficiency trim is disabled.',
@@ -47,15 +46,15 @@ DESCRIPTIONS = {'advice_disabled': 'The advisor is disabled; final reduction is 
                                        'efficiency request is held.',
  'efficiency_waiting_for_forecast': 'Price reduction is enabled and its forecast is unavailable; '
                                     'efficiency holds its current request.',
- 'efficiency_demand_recovery': 'Room shortfall or sustained rising demand requests one degree less '
-                               'efficiency reduction.',
+ 'efficiency_room_shortfall_recovery': 'Room shortfall has reached the recovery threshold. Efficiency '
+                                       'requests one degree less reduction.',
  'efficiency_low_gap_recovery': 'The current return gap is at or below the low limit. Efficiency '
                                 'requests one degree less reduction.',
  'efficiency_room_margin_insufficient': 'Room shortfall is above the efficiency margin or is '
                                         'increasing too quickly; no further reduction is '
                                         'requested.',
- 'efficiency_margin_inconclusive': 'The return gap is not consistently high enough, or secondary '
-                                   'flow is increasing; the efficiency request is held.',
+ 'efficiency_margin_inconclusive': 'The 30-minute minimum eligible return gap is below the high '
+                                   'limit. Efficiency holds its current request.',
  'efficiency_maximum_reduction': 'The efficiency request has reached the 4°C maximum.',
  'efficiency_temperature_floor': 'Another reduction would not lower the target because of the 27°C '
                                  'floor.',

@@ -27,7 +27,7 @@ def states(config):
     values={"curve_outdoor":(5,"°C"),"local_outdoor":(5,"°C"),"heat_power":(4,"kW"),
         "electric_power":(800,"W"),"backup_power":(0,"W"),"supply_temperature":(34,"°C"),
         "primary_return":(31,"°C"),"secondary_return":(27,"°C"),"primary_flow":(20,"L/min"),
-        "secondary_flow":(.6,"m³/h"),"compressor_frequency":(30,"Hz"),"heating_mode":("Room",None),
+        "compressor_frequency":(30,"Hz"),"heating_mode":("Room",None),
         "import_power":(.8,"kW"),"export_power":(0,"kW"),"pv_power":(500,"W"),"electricity_price":(.4,"EUR/kWh")}
     result={config["inputs"][key]:{"state":str(value),"attributes":{"unit_of_measurement":unit}} for key,(value,unit) in values.items()}
     result["climate.demo_a"]={"state":"heat","attributes":{"current_temperature":20,"temperature":20,"temperature_unit":"°C"}}

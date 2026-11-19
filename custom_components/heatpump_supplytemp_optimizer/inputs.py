@@ -84,9 +84,11 @@ def read_inputs(config, states, timestamp, pv_cache, allowances=None):
     backup = values["backup_power"] if "backup_power" in config["inputs"] else 0.
     values["backup_power"] = backup
     values["electric_total"] = values["electric_power"]+backup if values["electric_power"] is not None and backup is not None else None
-    water_roles = ["local_outdoor", "electric_power", "backup_power", "heat_power", "supply_temperature", "primary_return", "secondary_return", "secondary_flow"]
+    water_roles = ["local_outdoor", "electric_power", "backup_power", "heat_power",
+                   "supply_temperature", "primary_return", "secondary_return"]
     values["water_ok"] = all(values[k] is not None for k in water_roles)
-    values["space_ok"] = values["water_ok"] and values["space_mode"] and values["electric_power"] >= 0 and backup >= 0 and 0 <= values["secondary_flow"] <= 50 and 0 <= values["secondary_return"] <= 60
+    values["space_ok"] = (values["water_ok"] and values["space_mode"] and values["electric_power"] >= 0
+                          and backup >= 0 and 0 <= values["secondary_return"] <= 60)
     values["return_gap"] = values["primary_return"]-values["secondary_return"] if values["water_ok"] else None
     values["cop_ok"] = values["space_mode"] and all(values[k] is not None for k in ["heat_power", "electric_total"]) and values["electric_total"] >= 0
     values["learning_ok"] = (values["space_ok"] and values["rooms_ok"] and active > 0

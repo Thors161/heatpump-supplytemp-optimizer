@@ -38,11 +38,11 @@ def build_dashboard(entities, rooms):
         section("Controls & decisions", *controls, reasons(("decision","Decision"),("price_state","Price"),("efficiency_reason","Efficiency"))),
         section("Shared protections",
             tile("comfort_shortfall","Comfort protection"), tile("estimated_capacity_reached","Estimated capacity reached"),
-            tile("hydraulics_ready","Hydraulic history ready"), tile("demand_rising","Radiator demand rising"),
+            tile("hydraulics_ready","Hydraulic history ready"),
             tile("heating_mode","Heating mode"), tile("local_outdoor","Local outside temperature"),
             history("Shared protection history", [
                 ("comfort_shortfall","Comfort protection"), ("estimated_capacity_reached","Estimated capacity reached"),
-                ("hydraulics_ready","Hydraulic history ready"), ("demand_rising","Radiator demand rising"),
+                ("hydraulics_ready","Hydraulic history ready"),
                 ("heating_mode","Heating mode")])),
         section("Reduction history",history("Temperature reductions",[("price_reduction","Price request",P["price"]),("efficiency_reduction","Efficiency request",P["efficiency"]),("effective_reduction","Final advice",P["final"])]),
             text("The greater method request passes through shared comfort, capacity, hydraulic and timing checks. Final advice is not proof that equipment applied a command.")),
@@ -81,8 +81,7 @@ def build_dashboard(entities, rooms):
             reasons(("efficiency_reason","Efficiency"),("decision","Shared decision"))),
         section("Return temperatures & gap",history("Return temperatures",[("primary_return","Primary return",P["actual"]),("secondary_return","Secondary return",P["efficiency"])]),
             history("Return gap · °C",[("return_gap","Current gap",P["actual"]),("efficiency_gap_min_30m","Eligible minimum",P["efficiency"]),("gap_high","High gap",P["final"]),("gap_low","Low gap",P["original"])],min_y_axis=-10,max_y_axis=10,fit_y_data=False)),
-        section("Flow & demand changes",history("Water flow · L/min",[("primary_flow","Primary flow",P["actual"]),("secondary_flow","Secondary flow",P["efficiency"])]),
-            history("Flow change · L/min",[("secondary_flow_change_30m","General, 30 min",P["actual"]),("eligible_secondary_flow_change_30m","Eligible, 30 min",P["efficiency"])]),
+        section("Primary flow & trends",history("Primary flow · L/min",[("primary_flow","Primary flow",P["actual"])]),
             history("Return-gap change · °C",[("return_gap_change_30m","Change, 30 min")]),history("Shortfall change · °C",[("room_deficit_change_30m","Change, 30 min")])),
         section("Observation readiness",history("Efficiency observations",[("observations_ready","Efficiency ready"),("eligible_heating","Eligible heating")]),
             tile("heat_power","Heat output"),tile("compressor_frequency","Compressor frequency"))])
@@ -139,7 +138,7 @@ return result;""".replace("FIELD",key)
             editable("Maximum shortfall rise",[("room_max_shortfall_rise_"+r["id"],r["name"]) for r in rooms]),
             text("The allowance is subtracted before limiting the rise. Set a room's rise limit to 0 to disable it. A limit of 1°C/h allows up to 0.5°C of increase in 30 minutes. The demand model uses actual room temperatures.")),
         section("Efficiency · adjustable",editable("Hydraulic & comfort thresholds",[("gap_high","High gap"),("gap_low","Low gap"),("room_margin","Room margin for more trim"),("room_recovery","Room shortfall for recovery")]),
-            text("A sustained gap at or above the high limit permits more trim when secondary flow is steady or falling. A current gap at or below the low limit backs off efficiency trim. Require low < high and room margin < recovery.")),
+            text("The 30-minute minimum eligible gap must reach the high limit for more trim. A current gap at or below the low limit backs off efficiency trim. Require low < high and room margin < recovery.")),
         section("Price · fixed thresholds",text("Comparison: current heat cost minus the next-six-hour median.\n\n| Premium EUR/kWh heat | Request |\n|:--|--:|\n| ≤0.005 | 0°C |\n| >0.005 to 0.010 | 1°C |\n| >0.010 to 0.020 | 2°C |\n| >0.020 to 0.030 | 3°C |\n| >0.030 | 4°C |\n\nThe configured maximum and target floor still apply. Change source mappings, rooms, model, curve and export discount under the integration's configuration options.")),
         section("Shared timing",text("Normal decisions: :00/:15/:30/:45. Enable changes are immediate. One-degree steps are separated by at least 25 minutes. Comfort requires a shortfall of at least 0.5°C for 30 minutes and clears after 10 minutes below that level. Hydraulic hold lasts at most 30 minutes. Settings and source changes take effect at the next normal decision."))])
     return dict(title="Heat Pump Optimizer",views=[advice,price,efficiency,comfort,forecast,past,settings])

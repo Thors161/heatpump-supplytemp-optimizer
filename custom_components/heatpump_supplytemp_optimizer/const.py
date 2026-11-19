@@ -1,6 +1,7 @@
 """Public defaults and input roles. No household-specific configuration."""
 DOMAIN = "heatpump_supplytemp_optimizer"
 VERSION = "2.0.0-beta.1"
+CONFIG_MINOR_VERSION = 2
 STORAGE_VERSION = 1
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "button"]
 
@@ -10,7 +11,7 @@ REQUIRED_ROLES = {
     "heat_power": "power", "electric_power": "power",
     "supply_temperature": "temperature", "primary_return": "temperature",
     "secondary_return": "temperature", "primary_flow": "flow",
-    "secondary_flow": "flow", "compressor_frequency": "frequency",
+    "compressor_frequency": "frequency",
     "heating_mode": "mode",
 }
 OPTIONAL_ROLES = {

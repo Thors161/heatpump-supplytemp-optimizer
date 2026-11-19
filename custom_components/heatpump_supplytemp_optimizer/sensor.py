@@ -23,9 +23,7 @@ SENSORS = {
     "return_gap": ("Return gap", "°C", None),
     "primary_return": ("Primary return", "°C", "temperature"),
     "secondary_return": ("Secondary return", "°C", "temperature"),
-    "primary_flow": ("Primary flow", "L/min", None), "secondary_flow": ("Secondary flow", "L/min", None),
-    "secondary_flow_change_30m": ("Secondary-flow change, 30 min", "L/min", None),
-    "eligible_secondary_flow_change_30m": ("Eligible flow change, 30 min", "L/min", None),
+    "primary_flow": ("Primary flow", "L/min", None),
     "return_gap_change_30m": ("Return-gap change, 30 min", "°C", None),
     "efficiency_gap_min_30m": ("Eligible minimum gap, 30 min", "°C", None),
     "room_deficit_change_30m": ("Shortfall change, 30 min", "°C", None),
@@ -110,8 +108,8 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
             return d.get("limited_max_deficit") if d.get("rooms_ok") else None
         if key == "max_room_deficit":
             return d.get("raw_max_deficit") if d.get("rooms_ok") else None
-        observations = {"secondary_flow_change_30m": ("flow", "change"), "return_gap_change_30m": ("gap", "change"),
-            "eligible_secondary_flow_change_30m": ("eligible_flow", "change"), "efficiency_gap_min_30m": ("eligible_gap", "minimum"),
+        observations = {"return_gap_change_30m": ("gap", "change"),
+            "efficiency_gap_min_30m": ("eligible_gap", "minimum"),
             "room_deficit_change_30m": ("deficit", "change")}
         if key in observations:
             source, field = observations[key]

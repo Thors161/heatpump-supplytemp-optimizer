@@ -5,13 +5,13 @@ from uuid import uuid4
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
-from .const import DOMAIN, DEFAULT_MODEL, DEFAULT_PARAMETERS, REQUIRED_ROLES, ROOM_SHORTFALL_RISE
+from .const import CONFIG_MINOR_VERSION, DOMAIN, DEFAULT_MODEL, DEFAULT_PARAMETERS, REQUIRED_ROLES, ROOM_SHORTFALL_RISE
 from .schema import validate_config
 
 
 GROUPS = {
     "heat_pump": ["heat_power", "electric_power", "backup_power", "supply_temperature", "primary_return", "primary_flow", "compressor_frequency", "heating_mode", "actual_target"],
-    "hydraulics": ["secondary_return", "secondary_flow"],
+    "hydraulics": ["secondary_return"],
     "environment": ["curve_outdoor", "local_outdoor", "weather", "ventilation_power", "stove_temperature"],
     "electricity": ["import_power", "export_power", "pv_power", "electricity_price"],
 }
@@ -205,6 +205,7 @@ class ConfigurationWizard:
 
 class OptimizerConfigFlow(ConfigurationWizard, config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
+    MINOR_VERSION = CONFIG_MINOR_VERSION
 
     async def async_step_user(self, user_input=None):
         self._begin()

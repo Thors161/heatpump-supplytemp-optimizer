@@ -77,8 +77,7 @@ class Engine:
         self.last_decision_quarter = None
         self.space_since = self.learning_since = None
         self.comfort_since = self.comfort_clear_since = None
-        self.demand_since = self.demand_clear_since = None
-        self.comfort = self.demand_rising = False
+        self.comfort = False
         self.hydraulics_ready = self.observations_ready = False
         self.observations = {}
         # Preserve completed quarters and pre-quarter predictions, invalidate an open one.
@@ -98,18 +97,16 @@ class Engine:
         self._update_power_history(now)
         minute = int(now//60)
         if minute != self.last_sample_minute:
-            self.general.add(now, dict(flow=d["secondary_flow"] if d["space_ok"] else None,
-                gap=d["return_gap"] if d["space_ok"] else None,
+            self.general.add(now, dict(gap=d["return_gap"] if d["space_ok"] else None,
                 eligible_gap=d["return_gap"] if d["learning_ok"] else None,
-                eligible_flow=d["secondary_flow"] if d["learning_ok"] else None,
                 deficit=d["limited_max_deficit"] if d["rooms_ok"] and d["space_mode"] else None,
                 other=d["other_power"]))
             self.last_sample_minute = minute
-        self.observations = {k: self.general.changes(k, now) for k in ["flow", "gap", "eligible_gap", "eligible_flow", "deficit"]}
+        self.observations = {k: self.general.changes(k, now) for k in ["gap", "eligible_gap", "deficit"]}
         self.hydraulics_ready = (self.space_since is not None and now-self.space_since >= 1800
-                                and all(self.observations[k]["ready"] for k in ["flow", "gap"]))
+                                and self.observations["gap"]["ready"])
         self.observations_ready = (self.learning_since is not None and now-self.learning_since >= 300
-                                  and all(self.observations[k]["ready"] for k in ["eligible_gap", "eligible_flow", "deficit"]))
+                                  and all(self.observations[k]["ready"] for k in ["eligible_gap", "deficit"]))
         shortfall = not d["rooms_ok"] or d["limited_max_deficit"] >= .5
         if shortfall:
             self.comfort_clear_since = None
@@ -121,18 +118,6 @@ class Engine:
             self.comfort_clear_since = self.comfort_clear_since if self.comfort_clear_since is not None else now
             if now-self.comfort_clear_since >= 600:
                 self.comfort = False
-        growing = (self.hydraulics_ready and self.observations["flow"]["change"] >= 5/6
-                   and self.observations["gap"]["change"] <= -.3)
-        if growing:
-            self.demand_clear_since = None
-            self.demand_since = self.demand_since if self.demand_since is not None else now
-            if now-self.demand_since >= 1800:
-                self.demand_rising = True
-        else:
-            self.demand_since = None
-            self.demand_clear_since = self.demand_clear_since if self.demand_clear_since is not None else now
-            if now-self.demand_clear_since >= 300:
-                self.demand_rising = False
 
     def _limit_room_shortfalls(self, now):
         values = self.state["limited_shortfalls"]
@@ -249,8 +234,6 @@ class Engine:
                 wanted, reason = s["reduction"], "hydraulic_history_hold"
             else:
                 wanted, reason = 0, "hydraulic_hold_expired" if s["hold_until"] else "hydraulic_history_warming_up"
-        elif self.demand_rising:
-            wanted, reason = min(requested, max(0, s["reduction"]-1)), "radiator_demand_rising"
         if d["curve_outdoor"] is None:
             s["reason"] = "outdoor_temperature_invalid"
             # Master-off must still clear the advisory command without a valid curve.
@@ -290,13 +273,13 @@ class Engine:
             reason = "efficiency_observations_warming_up"
         elif s["price_enabled"] and not forecast_ok:
             reason = "efficiency_waiting_for_forecast"
-        elif d["limited_max_deficit"] >= cfg["room_recovery"]-.000001 or self.demand_rising:
-            wanted, reason = max(0, current-1), "efficiency_demand_recovery"
+        elif d["limited_max_deficit"] >= cfg["room_recovery"]-.000001:
+            wanted, reason = max(0, current-1), "efficiency_room_shortfall_recovery"
         elif d["return_gap"] <= cfg["gap_low"]:
             wanted, reason = max(0, current-1), "efficiency_low_gap_recovery"
         elif d["limited_max_deficit"] > cfg["room_margin"]+.000001 or obs["deficit"]["change"] > .1+.000001:
             reason = "efficiency_room_margin_insufficient"
-        elif obs["eligible_gap"]["minimum"] < cfg["gap_high"] or obs["eligible_flow"]["change"] > 0:
+        elif obs["eligible_gap"]["minimum"] < cfg["gap_high"]:
             reason = "efficiency_margin_inconclusive"
         elif current >= self.config["parameters"]["maximum_reduction"]:
             reason = "efficiency_maximum_reduction"

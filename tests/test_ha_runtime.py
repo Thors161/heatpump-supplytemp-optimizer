@@ -13,7 +13,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import device_registry as dr, area_registry as ar, frame
 from homeassistant.setup import async_setup_component
 from homeassistant import loader
-from custom_components.heatpump_supplytemp_optimizer.const import DOMAIN
+from custom_components.heatpump_supplytemp_optimizer.const import CONFIG_MINOR_VERSION, DOMAIN
 
 
 @pytest.fixture
@@ -43,8 +43,8 @@ async def hass(tmp_path):
     await instance.async_stop(force=True)
 
 
-def make_entry(config):
-    return ConfigEntry(domain=DOMAIN,title=config['name'],data=config,options={},version=1,minor_version=1,
+def make_entry(config, *, options=None, minor_version=CONFIG_MINOR_VERSION):
+    return ConfigEntry(domain=DOMAIN,title=config['name'],data=config,options=options or {},version=1,minor_version=minor_version,
         source='user',unique_id=None,discovery_keys=MappingProxyType({}),subentries_data=None)
 
 
@@ -77,6 +77,23 @@ async def test_real_integration_setup_entities_and_read_only_forecast(hass,confi
     assert hass.states.get(entity).state=='0'
     assert entry.runtime_data.engine.state['forecast']['complete']
     assert all(not name.startswith('input_') for name in {s.entity_id.split('.')[0] for s in hass.states.async_all()})
+
+
+async def test_existing_entry_migrates_removed_flow_mapping(hass, config, states):
+    await seed(hass, config, states)
+    config["inputs"]["secondary_flow"] = "sensor.old_flow"
+    configured = deepcopy(config)
+    configured["rooms"][0]["max_shortfall_rise"] = 1
+    entry = make_entry(config, options={"configuration": configured}, minor_version=1)
+    await hass.config_entries.async_add(entry)
+    await hass.async_block_till_done()
+
+    assert entry.state == ConfigEntryState.LOADED
+    assert entry.minor_version == CONFIG_MINOR_VERSION
+    assert "secondary_flow" not in entry.data["inputs"]
+    assert "secondary_flow" not in entry.options["configuration"]["inputs"]
+    assert entry.runtime_data.engine.data["space_ok"]
+    assert entry.runtime_data.engine.state["shortfall_rise_limits"]["room_a"] == 1
 
 
 async def test_real_config_flow_import_and_options_room_editor(hass,config,states):
