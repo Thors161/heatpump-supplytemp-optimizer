@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.0-beta.2
+
+- Make Price the starting point for the reduction decision. Efficiency can add
+  trim after observing the current operating point, and shared protections
+  can lower the combined request.
+- Show the decision stages side by side on Advice and plot their totals in history.
+
 ## 2.0.0-beta.1
 
 - Convert the advisory package into the manufacturer-independent

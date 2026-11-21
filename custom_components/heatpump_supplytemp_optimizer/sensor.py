@@ -1,6 +1,5 @@
 """Advice, observations and per-room diagnostics. No writable equipment entities."""
 from homeassistant.components.sensor import SensorEntity, SensorStateClass, SensorDeviceClass
-from .const import MIN_STEP_SECONDS
 from .entity import OptimizerEntity
 from .forecast import valid_forecast
 from .model import curve
@@ -15,6 +14,10 @@ SENSORS = {
     "reduction": ("Reduction level", "°C", None),
     "efficiency_reduction": ("Efficiency request", "°C", None),
     "price_reduction": ("Price request", "°C", None),
+    "decision_price_reduction": ("Price at last decision", "°C", None),
+    "efficiency_addition": ("Efficiency addition", "°C", None),
+    "combined_reduction": ("Combined request", "°C", None),
+    "protected_reduction": ("Reduction after protections", "°C", None),
     "decision": ("Decision", None, None), "efficiency_reason": ("Efficiency state", None, None),
     "price_state": ("Price state", None, None), "forecast": ("Forecast", None, None),
     "max_room_deficit": ("Raw room shortfall", "°C", None),
@@ -82,11 +85,13 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
         if key == "baseline_temperature":
             return curve(d["curve_outdoor"], p, integer=True) if d.get("curve_outdoor") is not None else None
         if key == "efficiency_curve_temperature":
-            return max(p["target_floor"], curve(d["curve_outdoor"], p, integer=True)-(s["efficiency"] if s["efficiency_enabled"] else 0)) if d.get("curve_outdoor") is not None else None
+            return max(p["target_floor"], curve(d["curve_outdoor"], p, integer=True)-e.efficiency_addition) if d.get("curve_outdoor") is not None else None
         if key == "target_temperature":
             return s["target"]
-        if key in ["effective_reduction", "reduction"]:
+        if key in ["effective_reduction", "reduction", "decision_price_reduction", "combined_reduction", "protected_reduction"]:
             return s[key]
+        if key == "efficiency_addition":
+            return e.efficiency_addition if s["decision_price_reduction"] is not None else None
         if key == "efficiency_reduction":
             return s["efficiency"] if s["efficiency_enabled"] else 0
         if key == "price_reduction":

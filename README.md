@@ -1,8 +1,8 @@
 # Heat Pump Supply Temperature Optimizer
 
 A configurable Home Assistant integration that advises how far to lower a heat
-pump's weather-compensated supply temperature. It combines an efficiency trim
-with a price request, then applies shared comfort, capacity, hydraulic and timing
+pump's weather-compensated supply temperature. It starts with a price request,
+lets Efficiency add trim, then applies shared comfort, capacity, hydraulic and timing
 limits. **It does not send commands to the heat pump, pumps, TRVs or relays.**
 
 The integration is independent of heat-pump manufacturer. Source entities,
@@ -18,17 +18,18 @@ provided the heating system can still deliver enough heat to keep rooms comforta
 The optimizer uses the configured curve as its starting point and recommends a
 downward adjustment when conditions allow.
 
-1. **Efficiency.** The optimizer checks how close rooms are to their setpoints
-   and monitors primary flow and the return-temperature gap. When those readings
-   show room to reduce the target, it asks for a small trim.
-2. **Electricity cost.** With a calibrated heat-demand and efficiency model,
+1. **Electricity cost.** With a calibrated heat-demand and efficiency model,
    the optional price method uses tariffs, weather and any configured solar
    forecast to compare the estimated cost of producing heat now with the typical
    cost over the next six hours. It can request a reduction when heat is relatively
    expensive now.
-3. **Final advice.** Every quarter hour, the optimizer starts with the larger of
-   the two requests and applies room comfort, heat-pump capacity, hydraulic
-   readiness and timing checks. Changes normally happen in 1°C steps and respect the configured
+2. **Efficiency.** Once the current reduction is in effect, Efficiency checks
+   room shortfall and the return-temperature gap. It can add a degree above the
+   current reduction when the readings support it. It can withdraw its own trim
+   while retaining the Price request.
+3. **Final advice.** Every quarter hour, the optimizer applies room comfort,
+   heat-pump capacity, hydraulic readiness and timing checks to the combined
+   request. Changes normally happen in 1°C steps and respect the configured
    minimum target. Home Assistant shows the **Final reduction**, **Advised target**
    and the reason for the advice. Any equipment control is handled by an external
    automation.
@@ -46,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.1**.
+This is **2.0.0-beta.2**.
 
 ## Installation
 
@@ -204,11 +205,20 @@ Negative prices and export opportunity costs are retained.
 - Normal decisions run at :00/:15/:30/:45. Only the three enable switches cause
   immediate decisions. Source/forecast/number updates do not move the held output.
 - Reductions progress by one degree, with a minimum 25 minutes between steps.
-- The final request is the greater of price and efficiency, not their sum.
+- The combined request starts with the price reduction and adds any Efficiency
+  trim. A falling Price request carries over only the remaining Efficiency
+  addition. A rising Price request can absorb an existing addition, leaving
+  the combined request at the larger of its previous total and the new Price request.
+  The forecast still compares the original heating curve with an Efficiency
+  curve. The Efficiency curve uses only the addition from the last decision.
+- Efficiency uses eligible observations at the current advised reduction. When
+  the actual heat-pump target is configured, it must match the expected target
+  within 0.5°C for gap observations to count. The eligible gap window starts
+  afresh after a reduction change, a compressor pause or an unconfirmed target.
 - Shared comfort protection requests zero after the shortfall used by the optimizer is ≥0.5°C for
   30 minutes; release needs ten minutes below that level. Missing rooms are
   also explicitly rejected by the decision rules.
-- Efficiency backs off trim when the current return gap is at or below its low
+- Efficiency backs off its own trim when the current return gap is at or below its low
   limit. More trim requires the lowest eligible gap over 30 minutes to reach
   the high limit.
 - Hydraulic hold is bounded to 30 minutes and is not extended by repeated checks.
@@ -235,6 +245,10 @@ is valid YAML. The export does not overwrite an existing dashboard.
 Tabs: **Advice · Price · Efficiency · Comfort · Forecast · History · Settings**.
 Advice shows the shared protection states. Comfort shows per-room and maximum
 shortfalls alongside the comfort protection status.
+The Advice tab shows Price at the last decision, the Efficiency addition, the
+combined request, the reduction after protections and the final advice. The
+four totals share a history chart. Heating-target tiles show the original,
+advised and actual heat-pump targets when their readings are available.
 The exporter resolves actual registered entity IDs, including user renames and
 multiple instances. Re-export after adding/removing rooms or renaming entities.
 Large room graphs are split into groups of eight for native HA card limits.

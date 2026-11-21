@@ -1,5 +1,6 @@
 """Generate a dashboard from registered integration entity IDs."""
-P = {"price":"#8b5cf6", "efficiency":"#0d9488", "final":"#f59e0b", "original":"#8b949e", "actual":"#3b82f6"}
+P = {"price":"#8b5cf6", "efficiency":"#0d9488", "protected":"#dc6676",
+     "final":"#f59e0b", "original":"#8b949e", "actual":"#3b82f6"}
 
 
 def build_dashboard(entities, rooms):
@@ -31,11 +32,15 @@ def build_dashboard(entities, rooms):
                     entities=[dict(entity=entity(key),name=name) for key,name in rows])
     controls = [tile("enabled","Advisor"),tile("price_enabled","Price reduction",P["price"]),tile("efficiency_enabled","Efficiency trim",P["efficiency"])]
     advice = view("Advice", "advice", [
-        section("Current advice", tile("price_reduction","Price request",P["price"]),
-            tile("efficiency_reduction","Efficiency request",P["efficiency"]),
-            tile("effective_reduction","Final advice",P["final"]),tile("forecast","Forecast"),
-            tile("baseline_temperature","Original target",P["original"]),tile("target_temperature","Advised target",P["final"])),
-        section("Controls & decisions", *controls, reasons(("decision","Decision"),("price_state","Price"),("efficiency_reason","Efficiency"))),
+        section("Reduction decision", tile("decision_price_reduction","Price request",P["price"]),
+            tile("efficiency_addition","Efficiency addition",P["efficiency"]),
+            tile("combined_reduction","Combined request",P["efficiency"]),
+            tile("protected_reduction","After protections",P["protected"]),
+            tile("effective_reduction","Final advice now",P["final"]), reasons(("decision","Decision"))),
+        section("Heating targets", tile("baseline_temperature","Original target",P["original"]),
+            tile("target_temperature","Advised target",P["final"]),tile("actual_target","Actual heat pump",P["actual"]),
+            tile("forecast","Forecast")),
+        section("Controls & decisions", *controls, reasons(("price_state","Live Price"),("efficiency_reason","Efficiency"))),
         section("Shared protections",
             tile("comfort_shortfall","Comfort protection"), tile("estimated_capacity_reached","Estimated capacity reached"),
             tile("hydraulics_ready","Hydraulic history ready"),
@@ -44,8 +49,9 @@ def build_dashboard(entities, rooms):
                 ("comfort_shortfall","Comfort protection"), ("estimated_capacity_reached","Estimated capacity reached"),
                 ("hydraulics_ready","Hydraulic history ready"),
                 ("heating_mode","Heating mode")])),
-        section("Reduction history",history("Temperature reductions",[("price_reduction","Price request",P["price"]),("efficiency_reduction","Efficiency request",P["efficiency"]),("effective_reduction","Final advice",P["final"])]),
-            text("The greater method request passes through shared comfort, capacity, hydraulic and timing checks. Final advice is not proof that equipment applied a command.")),
+        section("Reduction history",history("Temperature reductions",[
+            ("decision_price_reduction","Price request",P["price"]),("combined_reduction","Combined request",P["efficiency"]),
+            ("protected_reduction","After protections",P["protected"]),("effective_reduction","Final advice",P["final"])])),
         section("Target history",history("Heating targets",[("baseline_temperature","Original curve",P["original"]),("target_temperature","Advised target",P["final"]),("actual_target","Actual heat pump",P["actual"])])),
         section("State history",history("Decision states",[("decision","Decision"),("price_state","Price"),("efficiency_reason","Efficiency")]),
             history("Controls & forecast",[("enabled","Advisor"),("price_enabled","Price"),("efficiency_enabled","Efficiency"),("forecast","Forecast")]))])
@@ -77,7 +83,7 @@ def build_dashboard(entities, rooms):
         section("Shortfalls used by optimizer", *room_graphs("Room shortfalls used by optimizer", "room_limited_shortfall_"),
             text("Configured rise limits slow increases. Decreases apply immediately. Off rooms show zero and missing readings appear as gaps."))])
     efficiency=view("Efficiency","efficiency",[
-        section("Efficiency decision",tile("efficiency_reduction","Efficiency request",P["efficiency"]),tile("limited_room_deficit","Shortfall used by optimizer"),
+        section("Efficiency decision",tile("efficiency_addition","Efficiency addition",P["efficiency"]),tile("limited_room_deficit","Shortfall used by optimizer"),
             reasons(("efficiency_reason","Efficiency"),("decision","Shared decision"))),
         section("Return temperatures & gap",history("Return temperatures",[("primary_return","Primary return",P["actual"]),("secondary_return","Secondary return",P["efficiency"])]),
             history("Return gap · °C",[("return_gap","Current gap",P["actual"]),("efficiency_gap_min_30m","Eligible minimum",P["efficiency"]),("gap_high","High gap",P["final"]),("gap_low","Low gap",P["original"])],min_y_axis=-10,max_y_axis=10,fit_y_data=False)),

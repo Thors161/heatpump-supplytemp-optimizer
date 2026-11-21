@@ -18,6 +18,7 @@ class Engine:
         self.state = dict(version=SNAPSHOT_VERSION, enabled=False, price_enabled=False,
                           efficiency_enabled=True, reduction=0, efficiency=0,
                           effective_reduction=0, target=None, baseline=None,
+                          decision_price_reduction=None, combined_reduction=None, protected_reduction=None,
                           changed=0., efficiency_changed=0., hold_until=0.,
                           reason="startup_waiting_for_decision", efficiency_reason="startup_waiting_for_observations",
                           pv_cache={}, settings=dict(config["settings"]), allowances={},
@@ -68,6 +69,7 @@ class Engine:
                           default_shortfall_rise_limits=default_rises)
         self._shortfall_sample_times = {}
         self.general = Rolling(saved.get("samples", []))
+        self.efficiency_gap = Rolling()
         # An outage must not be interpolated as a measured heating interval.
         self.power = Rolling()
         self.started = now
@@ -90,6 +92,9 @@ class Engine:
     def sample(self, states, now):
         d = self.data = read_inputs(self.config, states, now, self.state["pv_cache"], self.state["allowances"])
         self._limit_room_shortfalls(now)
+        target_confirmed = self._target_confirmed()
+        if not d["learning_ok"] or not target_confirmed:
+            self.efficiency_gap.samples.clear()
         self.space_since = (self.space_since if self.space_since is not None else now) if d["space_ok"] else None
         self.learning_since = (self.learning_since if self.learning_since is not None else now) if d["learning_ok"] else None
         self.power.add(now, {"heat": d["heat_power"] if d["cop_ok"] else None,
@@ -98,11 +103,13 @@ class Engine:
         minute = int(now//60)
         if minute != self.last_sample_minute:
             self.general.add(now, dict(gap=d["return_gap"] if d["space_ok"] else None,
-                eligible_gap=d["return_gap"] if d["learning_ok"] else None,
                 deficit=d["limited_max_deficit"] if d["rooms_ok"] and d["space_mode"] else None,
                 other=d["other_power"]))
+            if d["learning_ok"] and target_confirmed:
+                self.efficiency_gap.add(now, {"gap": d["return_gap"]})
             self.last_sample_minute = minute
-        self.observations = {k: self.general.changes(k, now) for k in ["gap", "eligible_gap", "deficit"]}
+        self.observations = {k: self.general.changes(k, now) for k in ["gap", "deficit"]}
+        self.observations["eligible_gap"] = self.efficiency_gap.changes("gap", now)
         self.hydraulics_ready = (self.space_since is not None and now-self.space_since >= 1800
                                 and self.observations["gap"]["ready"])
         self.observations_ready = (self.learning_since is not None and now-self.learning_since >= 300
@@ -118,6 +125,19 @@ class Engine:
             self.comfort_clear_since = self.comfort_clear_since if self.comfort_clear_since is not None else now
             if now-self.comfort_clear_since >= 600:
                 self.comfort = False
+
+    def _target_confirmed(self):
+        outdoor = self.data["curve_outdoor"]
+        if outdoor is None:
+            return False
+        if "actual_target" not in self.config["inputs"]:
+            return True
+        actual = self.data["actual_target"]
+        if actual is None:
+            return False
+        baseline = curve(outdoor, self.config["parameters"], integer=True)
+        expected = baseline - self.state["effective_reduction"]
+        return abs(actual - expected) <= .5
 
     def _limit_room_shortfalls(self, now):
         values = self.state["limited_shortfalls"]
@@ -177,6 +197,13 @@ class Engine:
     def price_request(self, now):
         return min(int(self.config["parameters"]["maximum_reduction"]), price_level(self.state["forecast"].get("premium"))) if self.state["enabled"] and self.state["price_enabled"] and valid_forecast(self.state["forecast"], now) else 0
 
+    @property
+    def efficiency_addition(self):
+        s = self.state
+        if not (s["enabled"] and s["efficiency_enabled"]):
+            return 0
+        return max(0, s["efficiency"] - (s["decision_price_reduction"] or 0))
+
     def price_state(self, now):
         s, f = self.state, self.state["forecast"]
         if not s["enabled"]:
@@ -205,16 +232,22 @@ class Engine:
         s, d, p, f = self.state, self.data, self.config["parameters"], self.state["forecast"]
         capacity = self.estimated_capacity_reached(now)
         forecast_ok = capacity is not None
+        price = self.price_request(now)
+        base = curve(d["curve_outdoor"], p, integer=True) if d["curve_outdoor"] is not None else None
+        maximum = int(p["maximum_reduction"])
+        if base is not None:
+            maximum = min(maximum, max(0, floor(base-p["target_floor"])))
         if self.hydraulics_ready or not s["enabled"] or not (s["price_enabled"] or s["efficiency_enabled"]):
             s["hold_until"] = 0.
         elif (s["enabled"] and (not s["price_enabled"] or forecast_ok)
               and (s["price_enabled"] or s["efficiency_enabled"]) and d["space_ok"] and d["rooms_ok"]
               and not self.comfort and not capacity and s["reduction"] > 0 and not s["hold_until"]):
             s["hold_until"] = now+1800
-        self._efficiency(now, forecast_ok, capacity)
-        requested = max(self.price_request(now), s["efficiency"] if s["efficiency_enabled"] else 0)
+        self._efficiency(now, price, forecast_ok, capacity, maximum)
+        s["decision_price_reduction"] = price
+        requested = s["combined_reduction"] = price + self.efficiency_addition
         wanted = requested
-        reason = f"efficiency_level_{s['efficiency']}" if s["efficiency"] > self.price_request(now) and s["efficiency_enabled"] else f"price_level_{self.price_request(now)}"
+        reason = f"efficiency_level_{requested}" if requested > price else f"price_level_{price}"
         if not s["enabled"]:
             wanted, reason = 0, "advice_disabled"
         elif not s["price_enabled"] and not s["efficiency_enabled"]:
@@ -234,61 +267,78 @@ class Engine:
                 wanted, reason = s["reduction"], "hydraulic_history_hold"
             else:
                 wanted, reason = 0, "hydraulic_hold_expired" if s["hold_until"] else "hydraulic_history_warming_up"
-        if d["curve_outdoor"] is None:
+        if base is None:
             s["reason"] = "outdoor_temperature_invalid"
+            s["protected_reduction"] = None if s["enabled"] else 0
             # Master-off must still clear the advisory command without a valid curve.
             if not s["enabled"]:
                 s["reduction"] = s["effective_reduction"] = 0
             return True
+        if wanted > maximum:
+            wanted, reason = maximum, "target_floor_limits_reduction"
+        s["protected_reduction"] = wanted
         old = s["reduction"]
         new = 0 if not s["enabled"] else old+(1 if wanted > old else -1 if wanted < old else 0) if now-s["changed"] >= MIN_STEP_SECONDS else old
         if new != old:
             s["changed"] = now
         s["reduction"] = int(new)
-        base = curve(d["curve_outdoor"], p, integer=True)
-        target = max(p["target_floor"], base-new)
-        effective = min(int(p["maximum_reduction"]), floor(max(0., base-target)+.5), max(0, floor(base-p["target_floor"])))
-        # The external command is an integer shift; show its achievable target.
-        target = base-effective if s["enabled"] else base
-        s.update(baseline=base, target=target, effective_reduction=effective if s["enabled"] else 0,
-                 reason=reason+("; waiting for 25-minute minimum interval" if new != wanted else ""))
+        effective = min(new, maximum)
+        if effective != s["effective_reduction"]:
+            self.efficiency_gap.samples.clear()
+            self.observations["eligible_gap"] = self.efficiency_gap.changes("gap", now)
+            self.observations_ready = False
+        if effective != wanted:
+            reason += "; waiting for 25-minute minimum interval" if new == old else "; moving one degree per decision"
+        s.update(baseline=base, target=base-effective, effective_reduction=effective, reason=reason)
         return True
 
-    def _efficiency(self, now, forecast_ok, capacity):
+    def _efficiency(self, now, price, forecast_ok, capacity, maximum):
         s, d, cfg, obs = self.state, self.data, self.state["settings"], self.observations
-        current, wanted, reason = s["efficiency"], s["efficiency"], "efficiency_hold"
-        if not (s["enabled"] and s["efficiency_enabled"]):
+        enabled = s["enabled"] and s["efficiency_enabled"]
+        previous_price = s["decision_price_reduction"] or 0
+        # A falling price request must not turn its former contribution into efficiency trim.
+        current = max(0, s["efficiency"] - max(0, previous_price - price))
+        wanted, reason = current, "efficiency_hold"
+        applied = s["effective_reduction"]
+        recovery = current-1 if current > price else current
+        if not enabled:
             wanted, reason = 0, "efficiency_disabled"
         elif self.comfort:
-            wanted, reason = 0, "efficiency_comfort_recovery"
+            wanted, reason = recovery, "efficiency_comfort_recovery"
         elif capacity:
-            wanted, reason = 0, "efficiency_capacity_recovery"
+            wanted, reason = recovery, "efficiency_capacity_recovery"
         elif not (0 <= cfg["gap_low"] < cfg["gap_high"] and 0 <= cfg["room_margin"] < cfg["room_recovery"]):
             reason = "efficiency_settings_invalid"
         elif not d["space_ok"] or not d["rooms_ok"] or d["local_outdoor"] is None or d["curve_outdoor"] is None:
             reason = "efficiency_inputs_unavailable"
         elif not d["learning_ok"]:
             reason = "efficiency_heating_paused"
-        elif not self.hydraulics_ready or not self.observations_ready:
+        elif not self.hydraulics_ready:
             reason = "efficiency_observations_warming_up"
         elif s["price_enabled"] and not forecast_ok:
             reason = "efficiency_waiting_for_forecast"
         elif d["limited_max_deficit"] >= cfg["room_recovery"]-.000001:
-            wanted, reason = max(0, current-1), "efficiency_room_shortfall_recovery"
+            wanted = recovery
+            reason = "efficiency_room_shortfall_recovery" if current > price else "efficiency_room_shortfall_no_addition"
+        elif not self._target_confirmed():
+            reason = "efficiency_waiting_for_target"
         elif d["return_gap"] <= cfg["gap_low"]:
-            wanted, reason = max(0, current-1), "efficiency_low_gap_recovery"
+            wanted, reason = recovery, "efficiency_low_gap_recovery" if current > price else "efficiency_low_gap_no_addition"
+        elif max(price, current) != applied:
+            reason = "efficiency_waiting_for_reduction"
+        elif not self.observations_ready:
+            reason = "efficiency_observations_warming_up"
         elif d["limited_max_deficit"] > cfg["room_margin"]+.000001 or obs["deficit"]["change"] > .1+.000001:
             reason = "efficiency_room_margin_insufficient"
         elif obs["eligible_gap"]["minimum"] < cfg["gap_high"]:
             reason = "efficiency_margin_inconclusive"
-        elif current >= self.config["parameters"]["maximum_reduction"]:
+        elif applied >= self.config["parameters"]["maximum_reduction"]:
             reason = "efficiency_maximum_reduction"
-        elif max(self.config["parameters"]["target_floor"], curve(d["curve_outdoor"], self.config["parameters"], integer=True)-current-1) >= max(self.config["parameters"]["target_floor"], curve(d["curve_outdoor"], self.config["parameters"], integer=True)-current)-.01:
+        elif applied >= maximum:
             reason = "efficiency_temperature_floor"
         else:
-            wanted, reason = current+1, "efficiency_margin_available"
-        enabled = s["enabled"] and s["efficiency_enabled"]
-        new = 0 if not enabled else current+(1 if wanted > current else -1 if wanted < current else 0) if now-max(s["changed"], s["efficiency_changed"]) >= MIN_STEP_SECONDS else current
+            wanted, reason = applied+1, "efficiency_margin_available"
+        new = wanted if not enabled or now-max(s["changed"], s["efficiency_changed"]) >= MIN_STEP_SECONDS else current
         if new != current:
             s["efficiency_changed"] = now
         s.update(efficiency=int(new), efficiency_reason=reason)

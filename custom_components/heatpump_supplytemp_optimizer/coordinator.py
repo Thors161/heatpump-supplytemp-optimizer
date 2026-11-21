@@ -87,7 +87,7 @@ class OptimizerCoordinator(DataUpdateCoordinator):
         self.engine.sample(self.snapshot(), timestamp)
         f = self.engine.state["forecast"]
         wrong_quarter = not f.get("quarters") or f["quarters"][0]["start"] != int(timestamp//900)*900
-        wrong_trim = f.get("efficiency_reduction") != (self.engine.state["efficiency"] if self.engine.state["efficiency_enabled"] else 0)
+        wrong_trim = f.get("efficiency_reduction") != self.engine.efficiency_addition
         if not valid_forecast(f, timestamp) or wrong_quarter or wrong_trim:
             await self.async_refresh_forecast()
         self.publish()
@@ -161,7 +161,7 @@ class OptimizerCoordinator(DataUpdateCoordinator):
             prices = state.attributes.get(p["price_attribute"], []) if state else []
             other = self.engine.general.integral("other", now)
             forecast = predict(self.config, self.engine.data, prices, weather, solar, now,
-                efficiency=self.engine.state["efficiency"] if self.engine.state["efficiency_enabled"] else 0,
+                efficiency=self.engine.efficiency_addition,
                 other_mean=other["mean"] if other["available"] else None, provider_problems=problems)
             self.engine.set_forecast(forecast)
             self.publish()

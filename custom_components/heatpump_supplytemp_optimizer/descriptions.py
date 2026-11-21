@@ -48,8 +48,15 @@ DESCRIPTIONS = {'advice_disabled': 'The advisor is disabled; final reduction is 
                                     'efficiency holds its current request.',
  'efficiency_room_shortfall_recovery': 'Room shortfall has reached the recovery threshold. Efficiency '
                                        'requests one degree less reduction.',
+ 'efficiency_room_shortfall_no_addition': 'Room shortfall has reached the Efficiency recovery threshold. '
+                                          'There is no extra Efficiency reduction to withdraw.',
  'efficiency_low_gap_recovery': 'The current return gap is at or below the low limit. Efficiency '
                                 'requests one degree less reduction.',
+ 'efficiency_low_gap_no_addition': 'The return gap is at or below the low limit. There is no extra '
+                                   'Efficiency reduction to withdraw.',
+ 'efficiency_waiting_for_target': 'Waiting for the heat pump to report the expected target.',
+ 'efficiency_waiting_for_reduction': 'Waiting for the pending reduction to take effect before adding trim.',
+ 'target_floor_limits_reduction': 'The configured minimum target limits the requested reduction.',
  'efficiency_room_margin_insufficient': 'Room shortfall is above the efficiency margin or is '
                                         'increasing too quickly; no further reduction is '
                                         'requested.',
@@ -75,11 +82,13 @@ def describe(reason):
     elif code.startswith("room_data_missing:"):
         message="Room data is missing: "+code.split(":",1)[1].strip()
     elif code.startswith("efficiency_level_"):
-        message="Efficiency requests "+code.split("_")[-1]+"°C and exceeds the price request."
+        message="Price and Efficiency together request "+code.split("_")[-1]+"°C of reduction."
     else:
         message=DESCRIPTIONS.get(code,"See the exact diagnostic state for details.")
     if "waiting for 25-minute minimum interval" in text:
         message+=" The next step is waiting for the minimum interval between changes."
+    elif "moving one degree per decision" in text:
+        message+=" The advised reduction is moving by one degree per eligible decision."
     return message
 
 # Configurable equipment limits must not be described as fixed model values.
