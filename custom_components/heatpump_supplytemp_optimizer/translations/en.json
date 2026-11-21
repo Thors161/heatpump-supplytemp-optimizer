@@ -29,6 +29,7 @@
           "compressor_frequency": "Compressor frequency",
           "heating_mode": "Space heating / DHW state",
           "actual_target": "Actual heat pump target (optional)",
+          "reported_shift": "Reported curve shift (optional)",
           "defrost_state": "Defrost state (optional)"
         }
       },
@@ -195,6 +196,7 @@
           "compressor_frequency": "Compressor frequency",
           "heating_mode": "Space heating / DHW state",
           "actual_target": "Actual heat pump target (optional)",
+          "reported_shift": "Reported curve shift (optional)",
           "defrost_state": "Defrost state (optional)"
         }
       },

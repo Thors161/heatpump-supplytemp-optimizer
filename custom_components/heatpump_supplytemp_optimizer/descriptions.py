@@ -60,6 +60,9 @@ DESCRIPTIONS = {'advice_disabled': 'The advisor is disabled; final reduction is 
                                    'Efficiency reduction to withdraw.',
  'efficiency_waiting_for_reduction': 'Waiting for the advised reduction to reach the pending request '
                                       'before adding trim.',
+ 'efficiency_waiting_for_shift': 'Waiting for the heat pump to report the advised shift.',
+ 'efficiency_shift_not_applied': 'The reported shift still differs from Final advice. Efficiency holds its addition.',
+ 'efficiency_shift_readback_unavailable': 'The reported shift is unavailable. Efficiency holds its addition.',
  'target_floor_limits_reduction': 'The configured minimum target limits the requested reduction.',
  'efficiency_room_margin_insufficient': 'Room shortfall is above the efficiency margin or is '
                                         'increasing too quickly; no further reduction is '

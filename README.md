@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.4**.
+This is **2.0.0-beta.5**.
 
 ## Installation
 
@@ -86,7 +86,7 @@ integration entries. Remove that mapping from older profiles before importing th
 
 | Group | Inputs |
 |---|---|
-| Heat pump | Heat output, electrical power, optional backup-heater power, supply, primary return, primary flow, compressor frequency, heating-mode state, optional actual target and defrost state |
+| Heat pump | Heat output, electrical power, optional backup-heater power, supply, primary return, primary flow, compressor frequency, heating-mode state, optional actual target, reported shift and defrost state |
 | Hydraulics | Secondary return temperature |
 | Environment | Separate curve and local outside temperatures; optional weather, ventilation heat-pump electricity and stove temperature |
 | Electricity | Optional household import/export power, PV power and current tariff; required when their price-forecast function is used |
@@ -211,10 +211,17 @@ Negative prices and export opportunity costs are retained.
   the combined request at the larger of its previous total and the new Price request.
   The forecast still compares the original heating curve with an Efficiency
   curve. The Efficiency curve uses only the addition from the last decision.
-- Efficiency assumes the current advised reduction is in effect. The eligible
-  gap window starts afresh after the advised shift changes or the compressor
-  pauses. The optional actual heat-pump target is available for dashboard
-  display and history.
+- Efficiency uses Final advice as its operating point and keeps the rolling
+  return-gap history through ordinary shift and weather changes. Compressor
+  pauses and invalid heating inputs can still interrupt observations. The
+  optional actual heat-pump target is available for display and history.
+- Map the optional **Reported shift** input to the equipment's signed curve
+  shift. Unitless values are interpreted as degrees Celsius. During space
+  heating, a mismatch pauses Efficiency adjustments and excludes new gap samples.
+  The confirmation state changes from `waiting` to `not_applied` after the
+  **Shift confirmation grace period**, which defaults to five minutes. Price
+  continues independently, and the shared safeguards still control the final
+  advice. Without a readback input, Efficiency assumes Final advice is applied.
 - Shared comfort protection requests zero after the shortfall used by the optimizer is ≥0.5°C for
   30 minutes; release needs ten minutes below that level. Missing rooms are
   also explicitly rejected by the decision rules.
@@ -257,6 +264,7 @@ The Advice tab shows Price at the last decision, the Efficiency addition, the
 combined request, the reduction after protections and the final advice. The
 four totals share a history chart. Heating-target tiles show the original,
 advised and actual heat-pump targets when their readings are available.
+The Shift confirmation section compares signed advised and reported shifts.
 The exporter resolves actual registered entity IDs, including user renames and
 multiple instances. Re-export after adding/removing rooms or renaming entities.
 Large room graphs are split into groups of eight for native HA card limits.

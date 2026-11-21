@@ -77,6 +77,7 @@ class Engine:
             else []
         )
         self._defrost_active = None
+        self._shift_mismatch_since = None
         self._shortfall_sample_times = {}
         self.general = Rolling(saved.get("samples", []))
         self.efficiency_gap = Rolling()
@@ -103,6 +104,7 @@ class Engine:
         d = self.data = read_inputs(self.config, states, now, self.state["pv_cache"], self.state["allowances"])
         self._limit_room_shortfalls(now)
         self._observe_defrost(d["defrost_state"], now)
+        self._observe_shift(now)
         can_observe_efficiency = (d["learning_ok"] and d["curve_outdoor"] is not None
                                   and not self.defrost_protection(now))
         if not can_observe_efficiency:
@@ -117,7 +119,7 @@ class Engine:
             self.general.add(now, dict(gap=d["return_gap"] if d["space_ok"] else None,
                 deficit=d["limited_max_deficit"] if d["rooms_ok"] and d["space_mode"] else None,
                 other=d["other_power"]))
-            if can_observe_efficiency:
+            if can_observe_efficiency and self.shift_confirmation(now) in ("unconfigured", "confirmed"):
                 self.efficiency_gap.add(now, {"gap": d["return_gap"]})
             self.last_sample_minute = minute
         self.observations = {k: self.general.changes(k, now) for k in ["gap", "deficit"]}
@@ -178,6 +180,28 @@ class Engine:
         threshold = self.state["settings"]["minimum_defrost_interval"] * 60
         return (len(starts) == 2 and starts[1] - starts[0] < threshold
                 and 0 <= now - starts[1] < threshold)
+
+    def _observe_shift(self, now):
+        if self.shift_confirmation(now) in ("waiting", "not_applied"):
+            if self._shift_mismatch_since is None:
+                self._shift_mismatch_since = now
+        else:
+            self._shift_mismatch_since = None
+
+    def shift_confirmation(self, now):
+        if "reported_shift" not in self.config["inputs"]:
+            return "unconfigured"
+        if not self.state["enabled"] or not self.data.get("space_mode"):
+            return "inactive"
+        reported = self.data.get("reported_shift")
+        if reported is None:
+            return "unavailable"
+        if abs(reported + self.state["effective_reduction"]) < .01:
+            return "confirmed"
+        grace = self.state["settings"]["shift_confirmation_grace"] * 60
+        if self._shift_mismatch_since is not None and now - self._shift_mismatch_since >= grace:
+            return "not_applied"
+        return "waiting"
 
     def _update_power_history(self, now):
         h, d = self.state["power_history"], self.data
@@ -303,13 +327,13 @@ class Engine:
             s["changed"] = now
         s["reduction"] = int(new)
         effective = min(new, maximum)
-        if effective != s["effective_reduction"]:
-            self.efficiency_gap.samples.clear()
-            self.observations["eligible_gap"] = self.efficiency_gap.changes("gap", now)
-            self.observations_ready = False
+        shift_changed = effective != s["effective_reduction"]
         if effective != wanted:
             reason += "; waiting for 25-minute minimum interval" if new == old else "; moving one degree per decision"
         s.update(baseline=base, target=base-effective, effective_reduction=effective, reason=reason)
+        if shift_changed:
+            self._shift_mismatch_since = None
+            self._observe_shift(now)
         return True
 
     def _efficiency(self, now, price, forecast_ok, capacity, defrost, maximum):
@@ -321,6 +345,7 @@ class Engine:
         wanted, reason = current, "efficiency_hold"
         applied = s["effective_reduction"]
         recovery = current-1 if current > price else current
+        confirmation = self.shift_confirmation(now)
         if not enabled:
             wanted, reason = 0, "efficiency_disabled"
         elif self.comfort:
@@ -339,11 +364,19 @@ class Engine:
             reason = "efficiency_observations_warming_up"
         elif s["price_enabled"] and not forecast_ok:
             reason = "efficiency_waiting_for_forecast"
+        elif confirmation in ("waiting", "not_applied", "unavailable"):
+            reason = {
+                "waiting": "efficiency_waiting_for_shift",
+                "not_applied": "efficiency_shift_not_applied",
+                "unavailable": "efficiency_shift_readback_unavailable",
+            }[confirmation]
         elif d["limited_max_deficit"] >= cfg["room_recovery"]-.000001:
             wanted = recovery
             reason = "efficiency_room_shortfall_recovery" if current > price else "efficiency_room_shortfall_no_addition"
         elif d["return_gap"] <= cfg["gap_low"]:
             wanted, reason = recovery, "efficiency_low_gap_recovery" if current > price else "efficiency_low_gap_no_addition"
+        elif max(price, current) > maximum:
+            reason = "efficiency_temperature_floor"
         elif max(price, current) != applied:
             reason = "efficiency_waiting_for_reduction"
         elif not self.observations_ready:
@@ -361,5 +394,7 @@ class Engine:
         new = wanted if not enabled or now-max(s["changed"], s["efficiency_changed"]) >= MIN_STEP_SECONDS else current
         if new != current:
             s["efficiency_changed"] = now
+        elif wanted != current:
+            reason += "; waiting for 25-minute minimum interval"
         s.update(efficiency=int(new), efficiency_reason=reason)
 

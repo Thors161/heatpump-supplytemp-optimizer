@@ -120,7 +120,7 @@ def test_existing_rooms_pass_through_adjusted_shortfall(config, states):
     assert e.data["limited_max_deficit"] == e.data["max_deficit"] == 2
 
 
-@pytest.mark.parametrize("value,unit,kind,expected",[(1000,"W","power",1),(.6,"m³/h","flow",10),(68,"°F","temperature",20),(200,"EUR/MWh","price",.2)])
+@pytest.mark.parametrize("value,unit,kind,expected",[(1000,"W","power",1),(.6,"m³/h","flow",10),(68,"°F","temperature",20),(-3.6,"°F","temperature_delta",-2),(200,"EUR/MWh","price",.2)])
 def test_units(value,unit,kind,expected):
     assert convert(value,unit,kind)==pytest.approx(expected)
     assert convert(value,"unsupported",kind) is None
@@ -224,7 +224,7 @@ def test_efficiency_gap_limit_changes_only_efficiency_trim(
     assert e.state["combined_reduction"] == e.state["protected_reduction"] == e.state["reduction"] == trim
 
 
-def test_efficiency_waits_for_samples_at_price_reduction_and_keeps_only_its_extra_trim(
+def test_efficiency_keeps_observations_at_price_reduction_and_keeps_only_its_extra_trim(
         config, states, forecasts):
     e = prepare(config, states, forecasts)
     e.state["settings"].update(gap_low=.5, gap_high=3.)
@@ -241,11 +241,11 @@ def test_efficiency_waits_for_samples_at_price_reduction_and_keeps_only_its_extr
     sample_through(1, 30)
     assert e.decide(NOW+1800)
     assert e.state["effective_reduction"] == 2
-    assert not e.observations_ready
+    assert e.observations_ready
     sample_through(31, 45)
     assert e.decide(NOW+2700)
     assert e.efficiency_addition == 0
-    assert e.state["efficiency_reason"] == "efficiency_observations_warming_up"
+    assert e.state["efficiency_reason"] == "efficiency_margin_available; waiting for 25-minute minimum interval"
     sample_through(46, 60)
     assert e.decide(NOW+3600)
     assert e.efficiency_addition == 1
@@ -267,13 +267,14 @@ def test_efficiency_uses_advised_shift_through_reported_target_changes(config, s
     e.state["settings"].update(gap_low=.5, gap_high=3.)
     assert e.decide(NOW)
     assert e.efficiency_addition == e.state["effective_reduction"] == 1
-    assert not e.observations_ready
+    assert e.observations_ready
 
     for minute in range(1, 31):
         if minute == 8:
             states["sensor.actual_target"]["state"] = "unavailable"
         elif minute == 15:
             states["sensor.actual_target"]["state"] = "31"
+            states[config["inputs"]["curve_outdoor"]]["state"] = "6"
         e.sample(states, NOW+minute*60)
     assert e.observations_ready
     assert e.decide(NOW+1800)
@@ -284,6 +285,46 @@ def test_efficiency_uses_advised_shift_through_reported_target_changes(config, s
     assert e.decide(NOW+2700)
     assert e.state["efficiency_reason"] == "efficiency_heating_paused"
     assert e.efficiency_addition == e.state["effective_reduction"] == 2
+
+
+def test_shift_readback_holds_efficiency_while_price_can_change(config, states, forecasts):
+    config["inputs"]["reported_shift"] = "sensor.reported_shift"
+    states["sensor.reported_shift"] = {"state": "-1", "attributes": {"unit_of_measurement": "°C"}}
+    e = prepare(config, states, forecasts)
+    e.state.update(efficiency=1, reduction=1, effective_reduction=1, decision_price_reduction=0)
+    e.state["forecast"].update(premium=.015, valid_until=NOW+7200)
+    for elapsed in range(0, 1801, 60):
+        e.sample(states, NOW+elapsed)
+    assert e.observations_ready
+    assert e.decide(NOW+1800)
+    assert e.state["effective_reduction"] == e.state["decision_price_reduction"] == 2
+    assert e.shift_confirmation(NOW+1800) == "waiting"
+
+    sample_count = len(e.efficiency_gap.samples)
+    e.sample(states, NOW+1860)
+    assert len(e.efficiency_gap.samples) == sample_count
+    e.sample(states, NOW+2700)
+    assert e.decide(NOW+2700)
+    assert e.state["efficiency_reason"] == "efficiency_shift_not_applied"
+    assert e.state["combined_reduction"] == e.state["protected_reduction"] == 2
+
+    e.state["forecast"]["premium"] = .04
+    e.sample(states, NOW+3600)
+    assert e.decide(NOW+3600)
+    assert e.state["efficiency_reason"] == "efficiency_shift_not_applied"
+    assert e.state["combined_reduction"] == e.state["protected_reduction"] == 4
+    assert e.state["effective_reduction"] == 3
+    assert e.shift_confirmation(NOW+3600) == "waiting"
+
+    states[config["inputs"]["heating_mode"]]["state"] = "Tank"
+    e.sample(states, NOW+3660)
+    assert e.shift_confirmation(NOW+3660) == "inactive"
+    states[config["inputs"]["heating_mode"]]["state"] = "Room"
+    e.sample(states, NOW+3720)
+    assert e.shift_confirmation(NOW+3720) == "waiting"
+    states["sensor.reported_shift"]["state"] = "-3"
+    e.sample(states, NOW+3780)
+    assert e.shift_confirmation(NOW+3780) == "confirmed"
 
 
 def test_higher_price_absorbs_earlier_addition_without_leapfrogging(config, states, forecasts):

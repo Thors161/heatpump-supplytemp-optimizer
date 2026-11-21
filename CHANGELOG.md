@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0-beta.5
+
+- Keep eligible return-gap observations across ordinary changes in advised shift.
+- Add optional shift readback and a configurable confirmation grace period.
+  Efficiency holds its addition while the applied shift is unconfirmed.
+
 ## 2.0.0-beta.4
 
 - Add shared frequent-defrost protection with an optional defrost input and

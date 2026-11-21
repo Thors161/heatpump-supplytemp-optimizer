@@ -47,6 +47,9 @@ SENSORS = {
     "local_outdoor": ("Local outside temperature", "°C", "temperature"),
     "curve_outdoor": ("Curve outside temperature", "°C", "temperature"),
     "actual_target": ("Actual heat pump target", "°C", "temperature"),
+    "advised_shift": ("Advised shift", "°C", None),
+    "reported_shift": ("Reported shift", "°C", None),
+    "shift_confirmation": ("Shift confirmation", None, None),
     "compressor_frequency": ("Compressor frequency", "Hz", None),
     "heating_mode": ("Heating mode", None, None),
     "predicted_heating_power": ("Predicted space-heating power", "kW", "power"),
@@ -92,6 +95,10 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
             return s[key]
         if key == "efficiency_addition":
             return e.efficiency_addition if s["decision_price_reduction"] is not None else None
+        if key == "advised_shift":
+            return -s["effective_reduction"]
+        if key == "shift_confirmation":
+            return e.shift_confirmation(now)
         if key == "efficiency_reduction":
             return s["efficiency"] if s["efficiency_enabled"] else 0
         if key == "price_reduction":

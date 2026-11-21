@@ -15,6 +15,7 @@ def convert(value, unit, kind):
         if unit == "K":
             return value-273.15
     factors = {
+        "temperature_delta": {"": 1., "°C": 1., "C": 1., "K": 1., "°F": 5/9, "F": 5/9},
         "power": {"W": .001, "kW": 1., "MW": 1000.},
         "flow": {"L/min": 1., "l/min": 1., "m3/h": 1000/60, "L/h": 1/60, "l/h": 1/60, "L/s": 60., "l/s": 60.},
         "frequency": {"Hz": 1.},

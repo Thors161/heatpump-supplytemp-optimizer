@@ -5,7 +5,8 @@ from .const import ROOM_SHORTFALL_RISE, SETTINGS
 from .entity import OptimizerEntity
 
 NAMES = {"gap_high":"High return gap", "gap_low":"Low return gap", "room_margin":"Room margin for more trim",
-    "room_recovery":"Room shortfall for recovery", "minimum_defrost_interval":"Minimum defrost interval"}
+    "room_recovery":"Room shortfall for recovery", "minimum_defrost_interval":"Minimum defrost interval",
+    "shift_confirmation_grace":"Shift confirmation grace period"}
 
 
 async def async_setup_entry(hass, entry, async_add_entities):

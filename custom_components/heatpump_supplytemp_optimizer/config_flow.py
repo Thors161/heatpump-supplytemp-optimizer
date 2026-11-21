@@ -10,7 +10,7 @@ from .schema import validate_config
 
 
 GROUPS = {
-    "heat_pump": ["heat_power", "electric_power", "backup_power", "supply_temperature", "primary_return", "primary_flow", "compressor_frequency", "heating_mode", "actual_target", "defrost_state"],
+    "heat_pump": ["heat_power", "electric_power", "backup_power", "supply_temperature", "primary_return", "primary_flow", "compressor_frequency", "heating_mode", "actual_target", "reported_shift", "defrost_state"],
     "hydraulics": ["secondary_return"],
     "environment": ["curve_outdoor", "local_outdoor", "weather", "ventilation_power", "stove_temperature"],
     "electricity": ["import_power", "export_power", "pv_power", "electricity_price"],

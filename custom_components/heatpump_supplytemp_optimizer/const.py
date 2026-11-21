@@ -1,6 +1,6 @@
 """Public defaults and input roles. No household-specific configuration."""
 DOMAIN = "heatpump_supplytemp_optimizer"
-VERSION = "2.0.0-beta.4"
+VERSION = "2.0.0-beta.5"
 CONFIG_MINOR_VERSION = 2
 STORAGE_VERSION = 1
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "button"]
@@ -15,7 +15,7 @@ REQUIRED_ROLES = {
     "heating_mode": "mode",
 }
 OPTIONAL_ROLES = {
-    "backup_power": "power", "actual_target": "temperature",
+    "backup_power": "power", "actual_target": "temperature", "reported_shift": "temperature_delta",
     "import_power": "power", "export_power": "power", "pv_power": "power",
     "electricity_price": "price", "ventilation_power": "power",
     "stove_temperature": "temperature", "weather": "weather", "defrost_state": "mode",
@@ -27,6 +27,7 @@ SETTINGS = {
     "room_margin": (.2, 0, 1, .1, "°C"),
     "room_recovery": (.4, 0, 2, .1, "°C"),
     "minimum_defrost_interval": (0., 0, 180, 1, "min"),
+    "shift_confirmation_grace": (5., 1, 30, 1, "min"),
 }
 ROOM_SHORTFALL_RISE = (0., 0., 10., .1, "°C/h")
 DEFAULT_PARAMETERS = {
