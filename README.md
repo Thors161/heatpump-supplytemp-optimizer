@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.2**.
+This is **2.0.0-beta.3**.
 
 ## Installation
 
@@ -211,10 +211,10 @@ Negative prices and export opportunity costs are retained.
   the combined request at the larger of its previous total and the new Price request.
   The forecast still compares the original heating curve with an Efficiency
   curve. The Efficiency curve uses only the addition from the last decision.
-- Efficiency uses eligible observations at the current advised reduction. When
-  the actual heat-pump target is configured, it must match the expected target
-  within 0.5°C for gap observations to count. The eligible gap window starts
-  afresh after a reduction change, a compressor pause or an unconfirmed target.
+- Efficiency assumes the current advised reduction is in effect. The eligible
+  gap window starts afresh after the advised shift changes or the compressor
+  pauses. The optional actual heat-pump target is available for dashboard
+  display and history.
 - Shared comfort protection requests zero after the shortfall used by the optimizer is ≥0.5°C for
   30 minutes; release needs ten minutes below that level. Missing rooms are
   also explicitly rejected by the decision rules.

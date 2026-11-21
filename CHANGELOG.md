@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0-beta.3
+
+- Use the held advised shift as the reference for Efficiency observations.
+  Keep the reported heat-pump target available for display and history.
+
 ## 2.0.0-beta.2
 
 - Make Price the starting point for the reduction decision. Efficiency can add

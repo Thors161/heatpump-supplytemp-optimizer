@@ -259,28 +259,31 @@ def test_efficiency_waits_for_samples_at_price_reduction_and_keeps_only_its_extr
     assert e.state["effective_reduction"] == 2
 
 
-def test_efficiency_learning_requires_confirmed_target_and_running_compressor(config, states, forecasts):
+def test_efficiency_uses_advised_shift_through_reported_target_changes(config, states, forecasts):
     config["inputs"]["actual_target"] = "sensor.actual_target"
     states["sensor.actual_target"] = {"state": "40", "attributes": {"unit_of_measurement": "°C"}}
     e = prepare(config, states, forecasts)
     e.state["price_enabled"] = False
     e.state["settings"].update(gap_low=.5, gap_high=3.)
     assert e.decide(NOW)
-    assert e.state["efficiency_reason"] == "efficiency_waiting_for_target"
+    assert e.efficiency_addition == e.state["effective_reduction"] == 1
+    assert not e.observations_ready
 
-    states["sensor.actual_target"]["state"] = str(e.state["target"])
     for minute in range(1, 31):
+        if minute == 8:
+            states["sensor.actual_target"]["state"] = "unavailable"
+        elif minute == 15:
+            states["sensor.actual_target"]["state"] = "31"
         e.sample(states, NOW+minute*60)
     assert e.observations_ready
     assert e.decide(NOW+1800)
-    assert e.efficiency_addition == e.state["effective_reduction"] == 1
+    assert e.efficiency_addition == e.state["effective_reduction"] == 2
 
-    states["sensor.actual_target"]["state"] = str(e.state["target"])
     states[config["inputs"]["compressor_frequency"]]["state"] = "0"
     e.sample(states, NOW+2700)
     assert e.decide(NOW+2700)
     assert e.state["efficiency_reason"] == "efficiency_heating_paused"
-    assert e.efficiency_addition == e.state["effective_reduction"] == 1
+    assert e.efficiency_addition == e.state["effective_reduction"] == 2
 
 
 def test_higher_price_absorbs_earlier_addition_without_leapfrogging(config, states, forecasts):

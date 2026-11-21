@@ -54,8 +54,8 @@ DESCRIPTIONS = {'advice_disabled': 'The advisor is disabled; final reduction is 
                                 'requests one degree less reduction.',
  'efficiency_low_gap_no_addition': 'The return gap is at or below the low limit. There is no extra '
                                    'Efficiency reduction to withdraw.',
- 'efficiency_waiting_for_target': 'Waiting for the heat pump to report the expected target.',
- 'efficiency_waiting_for_reduction': 'Waiting for the pending reduction to take effect before adding trim.',
+ 'efficiency_waiting_for_reduction': 'Waiting for the advised reduction to reach the pending request '
+                                      'before adding trim.',
  'target_floor_limits_reduction': 'The configured minimum target limits the requested reduction.',
  'efficiency_room_margin_insufficient': 'Room shortfall is above the efficiency margin or is '
                                         'increasing too quickly; no further reduction is '

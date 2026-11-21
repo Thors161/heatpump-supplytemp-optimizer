@@ -92,8 +92,8 @@ class Engine:
     def sample(self, states, now):
         d = self.data = read_inputs(self.config, states, now, self.state["pv_cache"], self.state["allowances"])
         self._limit_room_shortfalls(now)
-        target_confirmed = self._target_confirmed()
-        if not d["learning_ok"] or not target_confirmed:
+        can_observe_efficiency = d["learning_ok"] and d["curve_outdoor"] is not None
+        if not can_observe_efficiency:
             self.efficiency_gap.samples.clear()
         self.space_since = (self.space_since if self.space_since is not None else now) if d["space_ok"] else None
         self.learning_since = (self.learning_since if self.learning_since is not None else now) if d["learning_ok"] else None
@@ -105,7 +105,7 @@ class Engine:
             self.general.add(now, dict(gap=d["return_gap"] if d["space_ok"] else None,
                 deficit=d["limited_max_deficit"] if d["rooms_ok"] and d["space_mode"] else None,
                 other=d["other_power"]))
-            if d["learning_ok"] and target_confirmed:
+            if can_observe_efficiency:
                 self.efficiency_gap.add(now, {"gap": d["return_gap"]})
             self.last_sample_minute = minute
         self.observations = {k: self.general.changes(k, now) for k in ["gap", "deficit"]}
@@ -125,19 +125,6 @@ class Engine:
             self.comfort_clear_since = self.comfort_clear_since if self.comfort_clear_since is not None else now
             if now-self.comfort_clear_since >= 600:
                 self.comfort = False
-
-    def _target_confirmed(self):
-        outdoor = self.data["curve_outdoor"]
-        if outdoor is None:
-            return False
-        if "actual_target" not in self.config["inputs"]:
-            return True
-        actual = self.data["actual_target"]
-        if actual is None:
-            return False
-        baseline = curve(outdoor, self.config["parameters"], integer=True)
-        expected = baseline - self.state["effective_reduction"]
-        return abs(actual - expected) <= .5
 
     def _limit_room_shortfalls(self, now):
         values = self.state["limited_shortfalls"]
@@ -320,8 +307,6 @@ class Engine:
         elif d["limited_max_deficit"] >= cfg["room_recovery"]-.000001:
             wanted = recovery
             reason = "efficiency_room_shortfall_recovery" if current > price else "efficiency_room_shortfall_no_addition"
-        elif not self._target_confirmed():
-            reason = "efficiency_waiting_for_target"
         elif d["return_gap"] <= cfg["gap_low"]:
             wanted, reason = recovery, "efficiency_low_gap_recovery" if current > price else "efficiency_low_gap_no_addition"
         elif max(price, current) != applied:
