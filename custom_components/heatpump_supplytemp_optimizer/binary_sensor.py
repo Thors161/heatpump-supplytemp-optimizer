@@ -6,7 +6,8 @@ from .forecast import valid_forecast
 DEFINITIONS = {"comfort_shortfall": "Comfort protection", "hydraulics_ready": "Hydraulic history ready",
     "observations_ready": "Efficiency observations ready",
     "eligible_heating": "Eligible heating", "forecast_ready": "Forecast ready",
-    "estimated_capacity_reached": "Estimated capacity reached"}
+    "estimated_capacity_reached": "Estimated capacity reached",
+    "defrost_protection": "Frequent defrost protection"}
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
@@ -20,6 +21,8 @@ class OptimizerBinary(OptimizerEntity, BinarySensorEntity):
         now = self.coordinator.data["now"]
         if self.key == "estimated_capacity_reached":
             return e.estimated_capacity_reached(now)
+        if self.key == "defrost_protection":
+            return e.defrost_protection(now)
         return {"comfort_shortfall": e.comfort, "hydraulics_ready": e.hydraulics_ready,
             "observations_ready": e.observations_ready,
             "eligible_heating": e.data.get("learning_ok", False),

@@ -1,10 +1,11 @@
-"""Persistent efficiency and room comfort settings."""
+"""Persistent Efficiency and shared protection settings."""
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.helpers.entity import EntityCategory
 from .const import ROOM_SHORTFALL_RISE, SETTINGS
 from .entity import OptimizerEntity
 
-NAMES = {"gap_high":"High return gap", "gap_low":"Low return gap", "room_margin":"Room margin for more trim", "room_recovery":"Room shortfall for recovery"}
+NAMES = {"gap_high":"High return gap", "gap_low":"Low return gap", "room_margin":"Room margin for more trim",
+    "room_recovery":"Room shortfall for recovery", "minimum_defrost_interval":"Minimum defrost interval"}
 
 
 async def async_setup_entry(hass, entry, async_add_entities):

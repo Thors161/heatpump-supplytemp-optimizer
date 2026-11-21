@@ -23,6 +23,7 @@ class Engine:
                           reason="startup_waiting_for_decision", efficiency_reason="startup_waiting_for_observations",
                           pv_cache={}, settings=dict(config["settings"]), allowances={},
                           shortfall_rise_limits={}, limited_shortfalls={},
+                          defrost_starts=[],
                           forecast={}, power_history={}, predictions={},
                           default_settings=dict(config["settings"]),
                           default_allowances={r["id"]: r["allowance"] for r in config["rooms"]})
@@ -67,6 +68,15 @@ class Engine:
                 limited[rid] = value
         self.state.update(shortfall_rise_limits=rates, limited_shortfalls=limited,
                           default_shortfall_rise_limits=default_rises)
+        defrost_source = config["inputs"].get("defrost_state")
+        starts = self.state["defrost_starts"]
+        self.state["defrost_source"] = defrost_source
+        self.state["defrost_starts"] = (
+            sorted({value for t in starts if (value := numeric(t)) is not None and value <= now})[-2:]
+            if defrost_source and defrost_source == saved.get("defrost_source") and isinstance(starts, list)
+            else []
+        )
+        self._defrost_active = None
         self._shortfall_sample_times = {}
         self.general = Rolling(saved.get("samples", []))
         self.efficiency_gap = Rolling()
@@ -92,7 +102,9 @@ class Engine:
     def sample(self, states, now):
         d = self.data = read_inputs(self.config, states, now, self.state["pv_cache"], self.state["allowances"])
         self._limit_room_shortfalls(now)
-        can_observe_efficiency = d["learning_ok"] and d["curve_outdoor"] is not None
+        self._observe_defrost(d["defrost_state"], now)
+        can_observe_efficiency = (d["learning_ok"] and d["curve_outdoor"] is not None
+                                  and not self.defrost_protection(now))
         if not can_observe_efficiency:
             self.efficiency_gap.samples.clear()
         self.space_since = (self.space_since if self.space_since is not None else now) if d["space_ok"] else None
@@ -148,6 +160,24 @@ class Engine:
             if room["included"]:
                 maximum = max(maximum, room["limited"])
         self.data["limited_max_deficit"] = round(maximum, 6)
+
+    def _observe_defrost(self, state, now):
+        state = state.strip().lower() if isinstance(state, str) else ""
+        if state in {"on", "active"}:
+            starts = self.state["defrost_starts"]
+            if self._defrost_active is False and (not starts or now > starts[-1]):
+                self.state["defrost_starts"] = [*starts[-1:], now]
+            self._defrost_active = True
+        elif state in {"off", "inactive"}:
+            self._defrost_active = False
+        else:
+            self._defrost_active = None
+
+    def defrost_protection(self, now):
+        starts = self.state["defrost_starts"]
+        threshold = self.state["settings"]["minimum_defrost_interval"] * 60
+        return (len(starts) == 2 and starts[1] - starts[0] < threshold
+                and 0 <= now - starts[1] < threshold)
 
     def _update_power_history(self, now):
         h, d = self.state["power_history"], self.data
@@ -218,19 +248,20 @@ class Engine:
             return False
         s, d, p, f = self.state, self.data, self.config["parameters"], self.state["forecast"]
         capacity = self.estimated_capacity_reached(now)
+        defrost = self.defrost_protection(now)
         forecast_ok = capacity is not None
         price = self.price_request(now)
         base = curve(d["curve_outdoor"], p, integer=True) if d["curve_outdoor"] is not None else None
         maximum = int(p["maximum_reduction"])
         if base is not None:
             maximum = min(maximum, max(0, floor(base-p["target_floor"])))
-        if self.hydraulics_ready or not s["enabled"] or not (s["price_enabled"] or s["efficiency_enabled"]):
+        if self.hydraulics_ready or defrost or not s["enabled"] or not (s["price_enabled"] or s["efficiency_enabled"]):
             s["hold_until"] = 0.
         elif (s["enabled"] and (not s["price_enabled"] or forecast_ok)
               and (s["price_enabled"] or s["efficiency_enabled"]) and d["space_ok"] and d["rooms_ok"]
               and not self.comfort and not capacity and s["reduction"] > 0 and not s["hold_until"]):
             s["hold_until"] = now+1800
-        self._efficiency(now, price, forecast_ok, capacity, maximum)
+        self._efficiency(now, price, forecast_ok, capacity, defrost, maximum)
         s["decision_price_reduction"] = price
         requested = s["combined_reduction"] = price + self.efficiency_addition
         wanted = requested
@@ -249,6 +280,8 @@ class Engine:
             wanted, reason = 0, "persistent_room_shortfall"
         elif capacity:
             wanted, reason = 0, "little_estimated_capacity_margin"
+        elif defrost:
+            wanted, reason = 0, "defrost_interval_too_short"
         elif not self.hydraulics_ready:
             if s["reduction"] > 0 and s["hold_until"] > now:
                 wanted, reason = s["reduction"], "hydraulic_history_hold"
@@ -279,7 +312,7 @@ class Engine:
         s.update(baseline=base, target=base-effective, effective_reduction=effective, reason=reason)
         return True
 
-    def _efficiency(self, now, price, forecast_ok, capacity, maximum):
+    def _efficiency(self, now, price, forecast_ok, capacity, defrost, maximum):
         s, d, cfg, obs = self.state, self.data, self.state["settings"], self.observations
         enabled = s["enabled"] and s["efficiency_enabled"]
         previous_price = s["decision_price_reduction"] or 0
@@ -294,6 +327,8 @@ class Engine:
             wanted, reason = recovery, "efficiency_comfort_recovery"
         elif capacity:
             wanted, reason = recovery, "efficiency_capacity_recovery"
+        elif defrost:
+            reason = "efficiency_defrost_hold"
         elif not (0 <= cfg["gap_low"] < cfg["gap_high"] and 0 <= cfg["room_margin"] < cfg["room_recovery"]):
             reason = "efficiency_settings_invalid"
         elif not d["space_ok"] or not d["rooms_ok"] or d["local_outdoor"] is None or d["curve_outdoor"] is None:

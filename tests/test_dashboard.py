@@ -1,11 +1,12 @@
 from custom_components.heatpump_supplytemp_optimizer.dashboard import build_dashboard
 from custom_components.heatpump_supplytemp_optimizer.sensor import SENSORS
 from custom_components.heatpump_supplytemp_optimizer.binary_sensor import DEFINITIONS
+from custom_components.heatpump_supplytemp_optimizer.const import SETTINGS
 
 
 def generated(count):
     rooms=[{'id':f'room_{i}','name':f'Room {i}'} for i in range(count)]
-    keys=list(SENSORS)+list(DEFINITIONS)+['enabled','price_enabled','efficiency_enabled','gap_high','gap_low','room_margin','room_recovery','refresh_forecast','export_dashboard']
+    keys=list(SENSORS)+list(DEFINITIONS)+list(SETTINGS)+['enabled','price_enabled','efficiency_enabled','refresh_forecast','export_dashboard']
     keys += [prefix+r['id'] for r in rooms for prefix in
              ['room_shortfall_','room_limited_shortfall_','room_allowance_','room_max_shortfall_rise_']]
     return build_dashboard({k:'sensor.test_'+k for k in keys},rooms)

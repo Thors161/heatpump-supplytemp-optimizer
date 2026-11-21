@@ -43,10 +43,12 @@ def build_dashboard(entities, rooms):
         section("Controls & decisions", *controls, reasons(("price_state","Live Price"),("efficiency_reason","Efficiency"))),
         section("Shared protections",
             tile("comfort_shortfall","Comfort protection"), tile("estimated_capacity_reached","Estimated capacity reached"),
+            tile("defrost_protection","Frequent defrost protection"),
             tile("hydraulics_ready","Hydraulic history ready"),
             tile("heating_mode","Heating mode"), tile("local_outdoor","Local outside temperature"),
             history("Shared protection history", [
                 ("comfort_shortfall","Comfort protection"), ("estimated_capacity_reached","Estimated capacity reached"),
+                ("defrost_protection","Frequent defrost protection"),
                 ("hydraulics_ready","Hydraulic history ready"),
                 ("heating_mode","Heating mode")])),
         section("Reduction history",history("Temperature reductions",[
@@ -145,6 +147,9 @@ return result;""".replace("FIELD",key)
             text("The allowance is subtracted before limiting the rise. Set a room's rise limit to 0 to disable it. A limit of 1°C/h allows up to 0.5°C of increase in 30 minutes. The demand model uses actual room temperatures.")),
         section("Efficiency · adjustable",editable("Hydraulic & comfort thresholds",[("gap_high","High gap"),("gap_low","Low gap"),("room_margin","Room margin for more trim"),("room_recovery","Room shortfall for recovery")]),
             text("The 30-minute minimum eligible gap must reach the high limit for more trim. A current gap at or below the low limit backs off efficiency trim. Require low < high and room margin < recovery.")),
+        section("Frequent defrost protection",
+            editable("Defrost timing",[("minimum_defrost_interval","Minimum time between starts")]),
+            text("With a defrost sensor configured, two starts less than this many minutes apart request zero reduction. The protection clears after that many minutes without a new start. Set 0 to disable it.")),
         section("Price · fixed thresholds",text("Comparison: current heat cost minus the next-six-hour median.\n\n| Premium EUR/kWh heat | Request |\n|:--|--:|\n| ≤0.005 | 0°C |\n| >0.005 to 0.010 | 1°C |\n| >0.010 to 0.020 | 2°C |\n| >0.020 to 0.030 | 3°C |\n| >0.030 | 4°C |\n\nThe configured maximum and target floor still apply. Change source mappings, rooms, model, curve and export discount under the integration's configuration options.")),
         section("Shared timing",text("Normal decisions: :00/:15/:30/:45. Enable changes are immediate. One-degree steps are separated by at least 25 minutes. Comfort requires a shortfall of at least 0.5°C for 30 minutes and clears after 10 minutes below that level. Hydraulic hold lasts at most 30 minutes. Settings and source changes take effect at the next normal decision."))])
     return dict(title="Heat Pump Optimizer",views=[advice,price,efficiency,comfort,forecast,past,settings])

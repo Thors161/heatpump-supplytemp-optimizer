@@ -313,6 +313,60 @@ def test_estimated_capacity_status_matches_shared_protection(config, states, for
     assert e.estimated_capacity_reached(forecast["valid_until"]) is None
 
 
+@pytest.mark.parametrize(("inactive", "active"), [("Inactive", "Active"), ("off", "on")])
+def test_defrost_protection_uses_observed_start_intervals_and_expires(config, states, inactive, active):
+    config["inputs"]["defrost_state"] = "sensor.defrost"
+    config["settings"]["minimum_defrost_interval"] = 30
+    e = Engine(config, now=NOW)
+
+    def report(value, elapsed, engine=e):
+        states["sensor.defrost"] = {"state": value}
+        engine.sample(states, NOW+elapsed)
+        return engine.defrost_protection(NOW+elapsed)
+
+    assert not report(active, 0)  # A sensor that is already active at startup is not a new start.
+    assert not report(inactive, 30)
+    assert not report(active, 60)
+    assert not report(active, 120)
+    assert not report(inactive, 180)
+    assert not report(active, 1860)  # Exactly the configured minimum.
+    assert not report("unavailable", 1890)
+    assert not report(active, 1920)  # An unknown interval cannot establish a start.
+    assert not report(inactive, 1950)
+    assert report(active, 1980)
+
+    restored = Engine(config, e.serialize(), now=NOW+2000)
+    assert report(active, 2000, restored)
+    assert report(inactive, 2100, restored)
+    assert report(active, 2700, restored)
+    assert not restored.defrost_protection(NOW+4500)
+    restored.state["settings"]["minimum_defrost_interval"] = 0
+    assert not restored.defrost_protection(NOW+2700)
+
+
+def test_frequent_defrost_backs_off_combined_request_in_normal_steps(config, states, forecasts):
+    config["inputs"]["defrost_state"] = "sensor.defrost"
+    config["settings"]["minimum_defrost_interval"] = 90
+    states["sensor.defrost"] = {"state": "Inactive"}
+    e = prepare(config, states, forecasts)
+    e.state.update(efficiency=3, reduction=3, effective_reduction=3, decision_price_reduction=2)
+    e.state["forecast"].update(premium=.015, valid_until=NOW+8000)
+    for elapsed, defrost in [(30, "Active"), (60, "Inactive"), (600, "Active"), (660, "Inactive")]:
+        states["sensor.defrost"]["state"] = defrost
+        e.sample(states, NOW+elapsed)
+        assert e.state["effective_reduction"] == 3
+
+    for elapsed, held in [(900, 2), (1800, 2), (2700, 1), (3600, 1), (4500, 0)]:
+        e.sample(states, NOW+elapsed)
+        assert e.decide(NOW+elapsed)
+        assert e.state["reason"].startswith("defrost_interval_too_short")
+        assert e.state["decision_price_reduction"] == 2
+        assert e.efficiency_addition == 1
+        assert e.state["combined_reduction"] == 3
+        assert e.state["protected_reduction"] == 0
+        assert e.state["effective_reduction"] == held
+
+
 def test_dhw_excluded_from_cop_and_pause_negative_heat_included():
     r=Rolling()
     for i in range(31):

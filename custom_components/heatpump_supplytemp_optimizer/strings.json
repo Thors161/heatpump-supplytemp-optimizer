@@ -28,7 +28,8 @@
           "primary_flow": "Primary water flow",
           "compressor_frequency": "Compressor frequency",
           "heating_mode": "Space heating / DHW state",
-          "actual_target": "Actual heat pump target (optional)"
+          "actual_target": "Actual heat pump target (optional)",
+          "defrost_state": "Defrost state (optional)"
         }
       },
       "hydraulics": {
@@ -193,7 +194,8 @@
           "primary_flow": "Primary water flow",
           "compressor_frequency": "Compressor frequency",
           "heating_mode": "Space heating / DHW state",
-          "actual_target": "Actual heat pump target (optional)"
+          "actual_target": "Actual heat pump target (optional)",
+          "defrost_state": "Defrost state (optional)"
         }
       },
       "hydraulics": {

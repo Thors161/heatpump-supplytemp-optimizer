@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0-beta.4
+
+- Add shared frequent-defrost protection with an optional defrost input and
+  a configurable minimum interval between starts.
+
 ## 2.0.0-beta.3
 
 - Use the held advised shift as the reference for Efficiency observations.

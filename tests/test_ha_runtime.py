@@ -153,6 +153,8 @@ async def test_switch_and_number_persist_across_unload_reload(hass,config,states
     await hass.services.async_call('number','set_value',{'entity_id':number,'value':.7},blocking=True)
     rise_limit=registry.async_get_entity_id('number',DOMAIN,entry.entry_id+'_room_max_shortfall_rise_room_a')
     await hass.services.async_call('number','set_value',{'entity_id':rise_limit,'value':1.0},blocking=True)
+    defrost_interval=registry.async_get_entity_id('number',DOMAIN,entry.entry_id+'_minimum_defrost_interval')
+    await hass.services.async_call('number','set_value',{'entity_id':defrost_interval,'value':45},blocking=True)
     switch=registry.async_get_entity_id('switch',DOMAIN,entry.entry_id+'_enabled')
     await hass.services.async_call('switch','turn_on',{'entity_id':switch},blocking=True)
     await hass.config_entries.async_reload(entry.entry_id)
@@ -162,6 +164,7 @@ async def test_switch_and_number_persist_across_unload_reload(hass,config,states
     assert hass.states.get(number).state=='0.7'
     assert entry.runtime_data.engine.state['shortfall_rise_limits']['room_a']==1.0
     assert float(hass.states.get(rise_limit).state)==1.0
+    assert float(hass.states.get(defrost_interval).state)==45
 
 
 async def test_state_and_parameter_updates_do_not_recalculate_between_boundaries(hass,config,states):
@@ -220,6 +223,8 @@ async def test_unconfirmed_model_blocks_price_enable(hass,config,states):
 
 async def test_manual_setup_flow_and_last_room_removal_validation(hass,config,states):
     from custom_components.heatpump_supplytemp_optimizer.config_flow import GROUPS
+    config["inputs"]["defrost_state"] = "sensor.demo_defrost"
+    states["sensor.demo_defrost"] = {"state": "Inactive", "attributes": {}}
     await seed(hass,config,states)
     result=await hass.config_entries.flow.async_init(DOMAIN,context={'source':'user'})
     flow_id=result['flow_id']
@@ -245,6 +250,7 @@ async def test_manual_setup_flow_and_last_room_removal_validation(hass,config,st
     entry=result['result']
     await hass.async_block_till_done()
     assert entry.state==ConfigEntryState.LOADED
+    assert entry.runtime_data.config["inputs"]["defrost_state"] == "sensor.demo_defrost"
     opts=await hass.config_entries.options.async_init(entry.entry_id)
     fid=opts['flow_id']
     opts=await hass.config_entries.options.async_configure(fid,{'next_step_id':'rooms'})

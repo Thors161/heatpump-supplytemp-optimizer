@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.3**.
+This is **2.0.0-beta.4**.
 
 ## Installation
 
@@ -86,7 +86,7 @@ integration entries. Remove that mapping from older profiles before importing th
 
 | Group | Inputs |
 |---|---|
-| Heat pump | Heat output, electrical power, optional backup-heater power, supply, primary return, primary flow, compressor frequency, heating-mode state, optional actual target |
+| Heat pump | Heat output, electrical power, optional backup-heater power, supply, primary return, primary flow, compressor frequency, heating-mode state, optional actual target and defrost state |
 | Hydraulics | Secondary return temperature |
 | Environment | Separate curve and local outside temperatures; optional weather, ventilation heat-pump electricity and stove temperature |
 | Electricity | Optional household import/export power, PV power and current tariff; required when their price-forecast function is used |
@@ -222,6 +222,14 @@ Negative prices and export opportunity costs are retained.
   limit. More trim requires the lowest eligible gap over 30 minutes to reach
   the high limit.
 - Hydraulic hold is bounded to 30 minutes and is not extended by repeated checks.
+- Frequent defrost protection is shared by Price and Efficiency. Map a **Defrost
+  state** sensor under **Heat pump** and set **Minimum defrost interval** in the
+  dashboard's **Settings** tab. The sensor may report `Active`/`Inactive` or
+  `on`/`off`. The setting defaults to **0 minutes**, which disables protection.
+  When two observed starts are less than the configured interval apart, the
+  safeguard requests zero reduction. It clears once there has been no new start
+  for that interval. A single observed start leaves the safeguard off. Advice
+  moves toward zero using the usual one-degree steps and 25-minute minimum.
 - Settings, method levels, held targets, change times, cache timestamps and matched
   pre-quarter predictions are stored in one integration-owned HA storage record.
 - There are no extra `input_*` helpers or legacy cumulative-COP statistics.
