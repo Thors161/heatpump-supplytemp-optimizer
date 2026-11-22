@@ -36,7 +36,7 @@ class OptimizerButton(OptimizerEntity, ButtonEntity):
                 if entity_id is None:
                     raise ValueError("An integration entity has not registered: "+key)
                 identifiers[key]=entity_id
-        config=build_dashboard(identifiers,c.config["rooms"])
+        config=build_dashboard(identifiers, rooms, defrost_entity=c.config["inputs"].get("defrost_state"))
         # JSON is valid YAML, including HA's raw dashboard YAML editor.
         path=Path(self.hass.config.path(f"{DOMAIN}_dashboard_{c.entry.entry_id}.yaml"))
         await self.hass.async_add_executor_job(path.write_text,json.dumps(config,indent=2,ensure_ascii=False)+"\n")

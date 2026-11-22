@@ -10,6 +10,6 @@ async def async_get_config_entry_diagnostics(hass, entry):
             "enabled":e.state["enabled"],"forecast_status":e.state["forecast"].get("status","waiting"),
             "forecast_problem_count":len(e.state["forecast"].get("problems",[])),
             "hydraulics_ready":e.hydraulics_ready,"observations_ready":e.observations_ready,
-            "reduction":e.state["reduction"],"efficiency":e.state["efficiency"],
+            "reduction":e.state["effective_reduction"],"efficiency":e.efficiency_addition,
             "model_confirmed":c.config["model"]["confirmed"]}
 

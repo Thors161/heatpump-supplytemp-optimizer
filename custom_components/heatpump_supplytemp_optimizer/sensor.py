@@ -8,6 +8,7 @@ from .descriptions import describe
 # key: (name, unit, device class). Unit conversions happen before these values.
 SENSORS = {
     "baseline_temperature": ("Original target", "°C", "temperature"),
+    "decision_baseline": ("Baseline at last decision", "°C", "temperature"),
     "target_temperature": ("Advised target", "°C", "temperature"),
     "efficiency_curve_temperature": ("Efficiency curve", "°C", "temperature"),
     "effective_reduction": ("Final reduction", "°C", None),
@@ -79,6 +80,8 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
         if unit or key in COP_KEYS:
             self._attr_state_class = SensorStateClass.MEASUREMENT
             self._attr_suggested_display_precision = 2 if unit == "EUR/kWh" else 1
+        if key == "heat_cost_premium_6h":
+            self._attr_suggested_display_precision = 4
 
     @property
     def native_value(self):
@@ -87,11 +90,15 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
         now = self.coordinator.data["now"]
         if key == "baseline_temperature":
             return curve(d["curve_outdoor"], p, integer=True) if d.get("curve_outdoor") is not None else None
+        if key == "decision_baseline":
+            return s["baseline"]
         if key == "efficiency_curve_temperature":
             return max(p["target_floor"], curve(d["curve_outdoor"], p, integer=True)-e.efficiency_addition) if d.get("curve_outdoor") is not None else None
         if key == "target_temperature":
-            return s["target"]
-        if key in ["effective_reduction", "reduction", "decision_price_reduction", "combined_reduction", "protected_reduction"]:
+            return s["target"] if d.get("curve_outdoor") is not None else None
+        if key == "reduction":
+            return s["effective_reduction"]
+        if key in ["effective_reduction", "decision_price_reduction", "combined_reduction", "protected_reduction"]:
             return s[key]
         if key == "efficiency_addition":
             return e.efficiency_addition if s["decision_price_reduction"] is not None else None
@@ -100,7 +107,7 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
         if key == "shift_confirmation":
             return e.shift_confirmation(now)
         if key == "efficiency_reduction":
-            return s["efficiency"] if s["efficiency_enabled"] else 0
+            return s["combined_reduction"] if s["enabled"] and s["efficiency_enabled"] else 0
         if key == "price_reduction":
             return e.price_request(now)
         if key == "decision":
@@ -150,7 +157,21 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
     def extra_state_attributes(self):
         e = self.coordinator.engine
         if self.key in ["decision", "efficiency_reason", "price_state"]:
-            return {"description": describe(self.native_value)}
+            description = describe(self.native_value)
+            if self.key == "decision":
+                return {"description": description, "decision_at": e.state["decision_at"],
+                        "next_step_at": e.state["next_step_at"]}
+            if self.native_value == "efficiency_waiting_for_reduction" and e.state["evaluated_reduction"] is not None:
+                description += (f" At evaluation the combined request was {e.state['combined_reduction']}°C"
+                                f" and the final reduction in effect was {e.state['evaluated_reduction']}°C.")
+            return {"description": description}
+        if self.key == "limited_room_deficit":
+            maximum = self.native_value
+            rooms = e.data["rooms"]
+            names = [room["name"] for room in e.config["rooms"]
+                     if room["enabled"] and maximum and rooms[room["id"]]["limited"] is not None
+                     and round(rooms[room["id"]]["limited"], 6) == maximum]
+            return {"limiting_rooms": names}
         if self.key == "forecast":
             f = e.state["forecast"]
             return {"result": f, "generated_at": f.get("generated_at"), "valid_until": f.get("valid_until")}

@@ -2,8 +2,7 @@
 from datetime import datetime
 from statistics import median
 from homeassistant.util import dt as dt_util
-from .const import FORECAST_SECONDS
-from .model import clamp, curve, predicted_cop, heat_demand, heat_cost
+from .model import clamp, curve, predicted_cop, heating_load, heat_cost
 from .schema import numeric
 from .units import convert
 
@@ -77,7 +76,8 @@ def in_interval(rows, at, *, solar=False):
 def valid_forecast(forecast, now):
     return (isinstance(forecast, dict) and forecast.get("complete") is True
             and forecast.get("status") == "ok" and numeric(forecast.get("premium")) is not None
-            and forecast.get("valid_until", 0) > now)
+            and forecast.get("valid_until", 0) > now and bool(forecast.get("quarters"))
+            and forecast["quarters"][0].get("start") == int(now//900)*900)
 
 
 def predict(config, data, prices, weather, solar, now, efficiency=0, other_mean=None, provider_problems=()):
@@ -114,8 +114,6 @@ def predict(config, data, prices, weather, solar, now, efficiency=0, other_mean=
     trim = clamp(int(efficiency), 0, int(p["maximum_reduction"]))
     if not problems:
         other = other_mean if numeric(other_mean) is not None else data["other_power"]
-        stove = clamp((data["stove_temperature"]-m["stove_idle_c"])/(m["stove_full_c"]-m["stove_idle_c"]), 0, 1) if "stove_temperature" in config["inputs"] else 0.
-        ventilation_fraction = clamp((data["ventilation_power"]*1000-m["ventilation_idle_w"])/(m["ventilation_full_w"]-m["ventilation_idle_w"]), 0, 1) if "ventilation_power" in config["inputs"] and data["local_outdoor"] < m["ventilation_space_below"] else 0.
         bias = clamp(data["local_outdoor"]-weather_now, -3, 3)
         for index in range(25):
             t, mid = q0+index*900, q0+index*900+450
@@ -140,8 +138,7 @@ def predict(config, data, prices, weather, solar, now, efficiency=0, other_mean=
                     problems.append(f"forecast_gap:{key}@{t}")
             if any(v is None for v in [price, temp, pv]):
                 continue
-            house = heat_demand(data["indoor"], temp, pv, stove, m)
-            need = max(0., house-(m["ventilation_heat_kw"]*ventilation_fraction if temp < m["ventilation_space_below"] else 0))
+            house, need = heating_load(data, temp, pv, m)
             q = clamp(need, p["comparison_min_heat_kw"], p["comparison_max_heat_kw"])
             original = curve(temp, p)
             water = max(p["target_floor"], original-trim)
@@ -161,7 +158,9 @@ def predict(config, data, prices, weather, solar, now, efficiency=0, other_mean=
         problems.append("current_tariff_mismatch")
     complete = len(slots) == 25 and not problems
     reference = median(q["heat_cost"] for q in slots[1:]) if complete else None
-    deadline = min(now+FORECAST_SECONDS, data["pv_hold_until"]) if data.get("pv_hold_until") else now+FORECAST_SECONDS
+    deadline = q0 + 900
+    if data.get("pv_hold_until"):
+        deadline = min(deadline, data["pv_hold_until"])
     return dict(status="ok" if complete else "incomplete", complete=complete, quarters=slots,
                 problems=list(dict.fromkeys(problems)), generated_at=now, valid_until=deadline,
                 current_cost=slots[0]["heat_cost"] if complete else None,

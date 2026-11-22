@@ -3,7 +3,9 @@ P = {"price":"#8b5cf6", "efficiency":"#0d9488", "protected":"#dc6676",
      "final":"#f59e0b", "original":"#8b949e", "actual":"#3b82f6"}
 
 
-def build_dashboard(entities, rooms):
+def build_dashboard(entities, rooms, *, defrost_entity=None):
+    if defrost_entity:
+        entities = {**entities, "defrost_activity": defrost_entity}
     def entity(key):
         return entities[key]
     def heading(title):
@@ -30,24 +32,46 @@ def build_dashboard(entities, rooms):
     def editable(title, rows):
         return dict(type="entities", title=title, show_header_toggle=False,
                     entities=[dict(entity=entity(key),name=name) for key,name in rows])
+    decision_card = reasons(("decision", "Decision"))
+    decision_card["content"] += """
+{% set at = state_attr('DECISION', 'decision_at') %}
+{% set next = state_attr('DECISION', 'next_step_at') %}
+{% if at is number %}Evaluated {{ at | timestamp_custom('%a %H:%M', true) }}.{% endif %}
+{% if next is number %}Earliest scheduled step if still requested: {{ next | timestamp_custom('%a %H:%M', true) }}.{% endif %}""".replace("DECISION", entity("decision"))
+
+    def active_detail(key, content):
+        return dict(type="conditional", conditions=[dict(condition="state", entity=entity(key), state="on")],
+                    card=text(content.replace("PROTECTION", entity(key))))
+
+    timeline = [("heating_mode", "Heating mode")]
+    if defrost_entity:
+        timeline.append(("defrost_activity", "Defrost activity"))
+    timeline.extend([("shift_confirmation", "Shift confirmation"), ("eligible_heating", "Eligible heating"),
+                     ("observations_ready", "Efficiency ready")])
     controls = [tile("enabled","Advisor"),tile("price_enabled","Price reduction",P["price"]),tile("efficiency_enabled","Efficiency trim",P["efficiency"])]
     advice = view("Advice", "advice", [
-        section("Reduction decision", tile("decision_price_reduction","Price request",P["price"]),
+        section("Last decision", tile("decision_price_reduction","Price at decision",P["price"]),
             tile("efficiency_addition","Efficiency addition",P["efficiency"]),
             tile("combined_reduction","Combined request",P["efficiency"]),
             tile("protected_reduction","After protections",P["protected"]),
-            tile("effective_reduction","Final advice now",P["final"]), reasons(("decision","Decision"))),
-        section("Heating targets", tile("baseline_temperature","Original target",P["original"]),
+            tile("effective_reduction","Final advice now",P["final"]), decision_card),
+        section("Heating targets", tile("decision_baseline","Baseline at decision",P["original"]),
             tile("target_temperature","Advised target",P["final"]),tile("actual_target","Actual heat pump",P["actual"]),
             tile("forecast","Forecast")),
         section("Shift confirmation", tile("advised_shift","Advised shift",P["final"]),
             tile("reported_shift","Reported shift",P["actual"]), tile("shift_confirmation","Confirmation")),
         section("Controls & decisions", *controls, reasons(("price_state","Live Price"),("efficiency_reason","Efficiency"))),
-        section("Shared protections",
+        section("Shared protections now",
             tile("comfort_shortfall","Comfort protection"), tile("estimated_capacity_reached","Estimated capacity reached"),
             tile("defrost_protection","Frequent defrost protection"),
             tile("hydraulics_ready","Hydraulic history ready"),
             tile("heating_mode","Heating mode"), tile("local_outdoor","Local outside temperature"),
+            active_detail("estimated_capacity_reached",
+                "Modeled heat-pump demand **{{ state_attr('PROTECTION', 'demand_kw') | round(2) }} kW** · "
+                "Capacity limit **{{ state_attr('PROTECTION', 'capacity_kw') }} kW**"),
+            active_detail("defrost_protection",
+                "Last two defrost starts **{{ state_attr('PROTECTION', 'interval_minutes') | round(1) }} min** apart · "
+                "Minimum interval **{{ state_attr('PROTECTION', 'minimum_minutes') }} min**"),
             history("Shared protection history", [
                 ("comfort_shortfall","Comfort protection"), ("estimated_capacity_reached","Estimated capacity reached"),
                 ("defrost_protection","Frequent defrost protection"),
@@ -56,13 +80,13 @@ def build_dashboard(entities, rooms):
         section("Reduction history",history("Temperature reductions",[
             ("decision_price_reduction","Price request",P["price"]),("combined_reduction","Combined request",P["efficiency"]),
             ("protected_reduction","After protections",P["protected"]),("effective_reduction","Final advice",P["final"])])),
-        section("Target history",history("Heating targets",[("baseline_temperature","Original curve",P["original"]),("target_temperature","Advised target",P["final"]),("actual_target","Actual heat pump",P["actual"])])),
+        section("Target history",history("Heating targets",[("decision_baseline","Baseline at decision",P["original"]),("target_temperature","Advised target",P["final"]),("actual_target","Actual heat pump",P["actual"])])),
         section("State history",history("Decision states",[("decision","Decision"),("price_state","Price"),("efficiency_reason","Efficiency")]),
             history("Controls & forecast",[("enabled","Advisor"),("price_enabled","Price"),("efficiency_enabled","Efficiency"),("forecast","Forecast")]))])
     price = view("Price","price",[
-        section("Price decision",tile("price_reduction","Price request",P["price"]),tile("effective_reduction","Final advice",P["final"]),
-            tile("current_heat_cost","Heat cost now"),tile("reference_heat_cost","Next 6h median"),tile("heat_cost_premium_6h","Cost premium"),
-            reasons(("price_state","Price"),("decision","Shared decision"))),
+        section("Price decision",tile("heat_cost_premium_6h","Live heat-cost premium"),tile("price_reduction","Live price request",P["price"]),
+            tile("current_heat_cost","Heat cost now"),tile("reference_heat_cost","Next 6h median"),tile("effective_reduction","Final advice",P["final"]),
+            reasons(("price_state","Live Price"),("decision","Last decision"))),
         section("Heat costs",history("Estimated heat costs · EUR/kWh heat",[("current_heat_cost","Heat cost now",P["price"]),("reference_heat_cost","Next 6h median",P["efficiency"]),("original_curve_heat_cost","Original curve",P["original"])]),
             tile("efficiency_heat_cost_difference","Estimated efficiency difference"),text("Cost differences are model estimates per kWh of heat, not measured total savings.")),
         section("Electricity & solar",history("Electricity value · EUR/kWh",[("import_price","Import price",P["price"]),("export_price","Export value",P["original"])]),
@@ -70,21 +94,27 @@ def build_dashboard(entities, rooms):
         section("COP & calculation inputs",history("Predicted & measured COP",[("original_curve_cop","Original curve",P["original"]),("predicted_cop","Efficiency curve",P["efficiency"]),("measured_cop_30m","Measured, 30 min",P["actual"])]),
             tile("efficiency_curve_temperature","Efficiency curve"),
             text("{% set f=state_attr('"+entity("forecast")+"','result') or {} %}**Forecast problems:** {{ f.get('problems',[])|join(', ') or 'none' }}\n\n**PV source:** {{ f.get('pv_source','unknown') }}"))])
-    def room_graphs(title, prefix):
+    def room_graphs(title, prefix, *, included_only=False):
         colors = ["#f59e0b", "#3b82f6", "#a78bfa", "#ec4899", "#0d9488"]
-        rows = [(prefix+room["id"], room["name"], colors[i % len(colors)]) for i, room in enumerate(rooms)]
+        rows = [(prefix+room["id"], room["name"], colors[i % len(colors)]) for i, room in enumerate(rooms)
+                if not included_only or room.get("enabled", True)]
         # Native history cards support at most eight entities.
         return [history(title+(f" · {i//8+1}" if len(rows)>8 else ""), rows[i:i+8])
                 for i in range(0, len(rows), 8)]
     comfort = view("Comfort", "comfort", [
         section("Room comfort",
             tile("comfort_shortfall","Comfort protection"), tile("limited_room_deficit","Maximum shortfall used"),
+            text("""{% set maximum = states('SHORTFALL') %}
+{% set rooms = state_attr('SHORTFALL', 'limiting_rooms') or [] %}
+{% if not is_number(maximum) %}Waiting for included room readings.
+{% elif rooms %}**Largest limited shortfall:** {{ rooms | join(', ') | e }} · {{ maximum | float | round(2) }} °C
+{% else %}Included rooms have no shortfall.{% endif %}""".replace("SHORTFALL", entity("limited_room_deficit"))),
             text("Protection applies to both methods when the shortfall used by the optimizer is at least 0.5°C for 30 minutes. It clears after 10 minutes below 0.5°C."),
             history("Maximum room shortfall", [
                 ("max_room_deficit","Raw",P["original"]), ("adjusted_room_deficit","After allowances","#dc6676"),
                 ("limited_room_deficit","Used by optimizer",P["actual"])])),
         section("Adjusted shortfalls", *room_graphs("Room shortfalls after allowances", "room_shortfall_")),
-        section("Shortfalls used by optimizer", *room_graphs("Room shortfalls used by optimizer", "room_limited_shortfall_"),
+        section("Shortfalls used by optimizer", *room_graphs("Room shortfalls used by optimizer", "room_limited_shortfall_", included_only=True),
             text("Configured rise limits slow increases. Decreases apply immediately. Off rooms show zero and missing readings appear as gaps."))])
     efficiency=view("Efficiency","efficiency",[
         section("Efficiency decision",tile("efficiency_addition","Efficiency addition",P["efficiency"]),tile("limited_room_deficit","Shortfall used by optimizer"),
@@ -93,8 +123,9 @@ def build_dashboard(entities, rooms):
             history("Return gap · °C",[("return_gap","Current gap",P["actual"]),("efficiency_gap_min_30m","Eligible minimum",P["efficiency"]),("gap_high","High gap",P["final"]),("gap_low","Low gap",P["original"])],min_y_axis=-10,max_y_axis=10,fit_y_data=False)),
         section("Primary flow & trends",history("Primary flow · L/min",[("primary_flow","Primary flow",P["actual"])]),
             history("Return-gap change · °C",[("return_gap_change_30m","Change, 30 min")]),history("Shortfall change · °C",[("room_deficit_change_30m","Change, 30 min")])),
-        section("Observation readiness",history("Efficiency observations",[("observations_ready","Efficiency ready"),("eligible_heating","Eligible heating")]),
-            tile("heat_power","Heat output"),tile("compressor_frequency","Compressor frequency"))])
+        section("Observation readiness",history("Heating and Efficiency · 24 hours", timeline),
+            history("Compressor frequency · 24 hours", [("compressor_frequency","Compressor frequency")]),
+            tile("heat_power","Heat output"))])
 
     def forecast_chart(title, unit, series):
         lines=[]
@@ -139,7 +170,7 @@ return result;""".replace("FIELD",key)
         return dict(type="statistics-graph",title=title,days_to_show=7,period="hour",chart_type="line",stat_types=["mean"],
                     entities=[dict(entity=entity(k),name=n) for k,n in rows],grid_options={"columns":"full","rows":5})
     past=view("History","history",[section("Matched space heating",statistics("Space-heating power · hourly",[("predicted_heating_power","Predicted heat"),("measured_heating_power","Measured matched heat")]),
-        statistics("Targets · seven days",[("baseline_temperature","Original curve"),("target_temperature","Advised target")]),
+        statistics("Targets · seven days",[("decision_baseline","Baseline at decision"),("target_temperature","Advised target")]),
         statistics("COP · seven days",[("predicted_cop","Predicted COP"),("measured_cop_30m","Measured COP")]),
         text("Power comparisons use predictions made before each complete quarter. DHW, startup partial quarters and invalid gaps are excluded. Predicted/measured power is thermal kW, not electrical power or measured savings."))])
     settings=view("Settings","settings",[

@@ -4,12 +4,12 @@ from custom_components.heatpump_supplytemp_optimizer.binary_sensor import DEFINI
 from custom_components.heatpump_supplytemp_optimizer.const import SETTINGS
 
 
-def generated(count):
-    rooms=[{'id':f'room_{i}','name':f'Room {i}'} for i in range(count)]
+def generated(count, *, excluded=(), defrost_entity=None):
+    rooms=[{'id':f'room_{i}','name':f'Room {i}','enabled':i not in excluded} for i in range(count)]
     keys=list(SENSORS)+list(DEFINITIONS)+list(SETTINGS)+['enabled','price_enabled','efficiency_enabled','refresh_forecast','export_dashboard']
     keys += [prefix+r['id'] for r in rooms for prefix in
              ['room_shortfall_','room_limited_shortfall_','room_allowance_','room_max_shortfall_rise_']]
-    return build_dashboard({k:'sensor.test_'+k for k in keys},rooms)
+    return build_dashboard({k:'sensor.test_'+k for k in keys},rooms,defrost_entity=defrost_entity)
 
 
 def test_large_homes_split_native_room_graphs_at_eight_entities():
@@ -45,3 +45,18 @@ def test_forecast_only_uses_custom_graphs_and_gap_axes_remain_fixed():
                 if view['path']!='forecast':assert not card['type'].startswith('custom:')
                 if card.get('title','').startswith('Return gap ·'):
                     assert (card['min_y_axis'],card['max_y_axis'],card['fit_y_data'])==(-10,10,False)
+
+def test_review_views_distinguish_live_inputs_and_decision_values():
+    views = {v["path"]: v for v in generated(3, excluded=(1,), defrost_entity="binary_sensor.hp_defrost")["views"]}
+    targets = views["advice"]["sections"][1]["cards"]
+    assert targets[1]["entity"] == "sensor.test_decision_baseline"
+    price = views["price"]["sections"][0]["cards"]
+    assert [c["name"] for c in price if c["type"] == "tile"][:2] == ["Live heat-cost premium", "Live price request"]
+    charts = views["comfort"]["sections"][-1]["cards"]
+    used = next(c for c in charts if c["type"] == "history-graph")
+    assert [r["name"] for r in used["entities"]] == ["Room 0", "Room 2"]
+    timeline, compressor = views["efficiency"]["sections"][-1]["cards"][1:3]
+    assert [r["entity"] for r in timeline["entities"]] == [
+        "sensor.test_heating_mode", "binary_sensor.hp_defrost", "sensor.test_shift_confirmation",
+        "sensor.test_eligible_heating", "sensor.test_observations_ready"]
+    assert compressor["entities"][0]["entity"] == "sensor.test_compressor_frequency"

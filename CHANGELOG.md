@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.0.0-beta.7
+
+- Store Efficiency trim separately from Price and step from the last final shift.
+- Use current-quarter prices and check capacity independently of future tariffs.
+- Preserve useful observations through routine defrosts and require enough eligible readings before adding trim.
+- Keep comfort protection effective with a missing curve reading and split measured heat at quarter boundaries.
+- Show decision timing, overnight heating states, limiting rooms and protection details on the dashboard.
+
 ## 2.0.0-beta.6
 
 - Pause Efficiency through routine defrosts without clearing its observation

@@ -9,6 +9,7 @@ from types import MappingProxyType
 import pytest
 from homeassistant.core import HomeAssistant, SupportsResponse
 from homeassistant.config_entries import ConfigEntry,ConfigEntries,ConfigEntryState
+from homeassistant.helpers.template import Template
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import device_registry as dr, area_registry as ar, frame
 from homeassistant.setup import async_setup_component
@@ -143,6 +144,41 @@ async def test_dashboard_export_resolves_real_ids_and_native_graphs(hass,config,
                     assert registry.async_get(row['entity']) is not None
 
 
+async def test_dashboard_explains_active_protections_and_limiting_room(hass, config, states):
+    config["parameters"]["capacity_kw"] = 2
+    config["inputs"]["defrost_state"] = "binary_sensor.hp_defrost"
+    config["settings"]["minimum_defrost_interval"] = 50
+    states["climate.demo_a"]["attributes"]["current_temperature"] = 19
+    config["rooms"].append(dict(config["rooms"][0], id="unused", name="Excluded", enabled=False))
+    await seed(hass, config, states)
+    entry = make_entry(config)
+    await hass.config_entries.async_add(entry)
+    await hass.async_block_till_done()
+    c = entry.runtime_data
+    now = datetime.now(timezone.utc).timestamp()
+    c.engine.state["defrost_starts"] = [now-1800, now-30]
+    c.engine.decide(now)
+    c.publish()
+    registry = er.async_get(hass)
+    button = registry.async_get_entity_id("button", DOMAIN, entry.entry_id+"_export_dashboard")
+    await hass.services.async_call("button", "press", {"entity_id":button}, blocking=True)
+    dashboard = json.loads(Path(hass.config.path(f"{DOMAIN}_dashboard_{entry.entry_id}.yaml")).read_text())
+    cards = [card for view in dashboard["views"] for section in view["sections"] for card in section["cards"]]
+
+    def render(card):
+        return Template(card["content"], hass).async_render(parse_result=False)
+
+    active = [card for card in cards if card["type"] == "conditional"]
+    assert len(active) == 2
+    assert all(hass.states.is_state(card["conditions"][0]["entity"], "on") for card in active)
+    assert "2.0 kW" in render(active[0]["card"])
+    assert "29.5 min" in render(active[1]["card"])
+    room = render(next(card for card in cards if "limiting_rooms" in card.get("content", "")))
+    assert "Room A" in room and "1.0 °C" in room and "Excluded" not in room
+    timing = render(next(card for card in cards if "decision_at" in card.get("content", "")))
+    assert "Evaluated" in timing and "Earliest" not in timing
+
+
 async def test_switch_and_number_persist_across_unload_reload(hass,config,states):
     await seed(hass,config,states)
     entry=make_entry(config)
@@ -173,7 +209,7 @@ async def test_state_and_parameter_updates_do_not_recalculate_between_boundaries
     await hass.config_entries.async_add(entry)
     await hass.async_block_till_done()
     c=entry.runtime_data
-    c.engine.state.update(target=33,effective_reduction=1,reduction=1,enabled=True)
+    c.engine.state.update(target=33,effective_reduction=1,enabled=True)
     hass.states.async_set(config['inputs']['curve_outdoor'],'-5',{'unit_of_measurement':'°C'})
     await hass.async_block_till_done()
     assert c.engine.state['target']==33
@@ -258,3 +294,28 @@ async def test_manual_setup_flow_and_last_room_removal_validation(hass,config,st
     opts=await hass.config_entries.options.async_configure(fid,{'room':entry.runtime_data.config['rooms'][0]['id']})
     assert opts['type']=='form' and opts['errors']['base']=='invalid_configuration'
 
+
+
+async def test_boundary_refreshes_previous_quarter_despite_recent_attempt(hass, config, states):
+    await seed(hass, config, states)
+    entry = make_entry(config)
+    await hass.config_entries.async_add(entry)
+    await hass.async_block_till_done()
+    c = entry.runtime_data
+    now = datetime.now(timezone.utc)
+    old = c.engine.state["forecast"]
+    old["quarters"][0]["start"] -= 900
+    old.update(premium=.04, valid_until=now.timestamp()+1200)
+    c.engine.forecast_attempt = now.timestamp()-15
+    c.engine.state.update(enabled=True, price_enabled=True)
+    assert c.engine.price_request(now.timestamp()) == 0
+    async with c._forecast_lock:
+        boundary = asyncio.create_task(c._boundary(now))
+        await asyncio.sleep(0)
+        assert not boundary.done()
+    await asyncio.wait_for(boundary, 5)
+    assert c.engine.state["forecast"] is not old
+    assert c.engine.state["decision_price_reduction"] > 0
+    current = c.engine.state["forecast"]
+    await c._boundary(now)
+    assert c.engine.state["forecast"] is current

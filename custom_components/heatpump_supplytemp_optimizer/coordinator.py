@@ -1,6 +1,5 @@
 """HA state subscriptions, read-only forecasts and atomic local persistence."""
 import asyncio
-from datetime import datetime
 import logging
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
@@ -39,11 +38,8 @@ class OptimizerCoordinator(DataUpdateCoordinator):
 
     @callback
     def snapshot(self):
-        entities = set(self.config["inputs"].values()) | set(self.config["pv_forecast_entities"]) | {"sun.sun"}
-        for room in self.config["rooms"]:
-            entities.update(v for k, v in room.items() if k in ["climate", "actual", "setpoint"] and v)
         result = {}
-        for entity in entities:
+        for entity in self.snapshot_entity_ids():
             state = self.hass.states.get(entity)
             if state is not None:
                 attrs = dict(state.attributes)
@@ -86,9 +82,8 @@ class OptimizerCoordinator(DataUpdateCoordinator):
         timestamp = now.timestamp()
         self.engine.sample(self.snapshot(), timestamp)
         f = self.engine.state["forecast"]
-        wrong_quarter = not f.get("quarters") or f["quarters"][0]["start"] != int(timestamp//900)*900
         wrong_trim = f.get("efficiency_reduction") != self.engine.efficiency_addition
-        if not valid_forecast(f, timestamp) or wrong_quarter or wrong_trim:
+        if not valid_forecast(f, timestamp) or wrong_trim:
             await self.async_refresh_forecast()
         self.publish()
         self.store.async_delay_save(self.engine.serialize, 10)
@@ -99,19 +94,21 @@ class OptimizerCoordinator(DataUpdateCoordinator):
             return
         self._last_boundary = quarter
         async with self._decision_lock:
-            await self.async_refresh_forecast()
+            await self.async_refresh_forecast(boundary=True)
             timestamp = dt_util.utcnow().timestamp()
             self.engine.sample(self.snapshot(), timestamp)
-            self.engine.decide(timestamp, immediate=True)
-            self.engine.last_decision_quarter = quarter
+            self.engine.decide(timestamp)
             await self.store.async_save(self.engine.serialize())
             self.publish()
 
-    async def async_refresh_forecast(self):
-        now = dt_util.utcnow().timestamp()
-        if self._stopping or self._forecast_lock.locked() or now-self.engine.forecast_attempt < 60:
+    async def async_refresh_forecast(self, *, boundary=False):
+        if self._stopping or (self._forecast_lock.locked() and not boundary):
             return
         async with self._forecast_lock:
+            now = dt_util.utcnow().timestamp()
+            recent = now - self.engine.forecast_attempt < 60
+            if self._stopping or (recent and (not boundary or valid_forecast(self.engine.state["forecast"], now))):
+                return
             self.engine.forecast_attempt = now
             self.engine.sample(self.snapshot(), now)
             inputs, p = self.config["inputs"], self.config["parameters"]
@@ -174,7 +171,7 @@ class OptimizerCoordinator(DataUpdateCoordinator):
             self.engine.state[key] = bool(enabled)
             now = dt_util.utcnow().timestamp()
             self.engine.sample(self.snapshot(), now)
-            self.engine.decide(now, immediate=True)
+            self.engine.decide(now)
             await self.store.async_save(self.engine.serialize())
             self.publish()
 

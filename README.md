@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.6**.
+This is **2.0.0-beta.7**.
 
 ## Installation
 
@@ -203,12 +203,20 @@ Negative prices and export opportunity costs are retained.
 ## Decisions and restart handling
 
 - Normal decisions run at :00/:15/:30/:45. Only the three enable switches cause
-  immediate decisions. Source/forecast/number updates do not move the held output.
-- Reductions progress by one degree, with a minimum 25 minutes between steps.
+  immediate decisions. Price uses a forecast whose first slot matches the
+  decision quarter. At a boundary the coordinator waits for an in-progress
+  refresh and can refresh even if the previous quarter was fetched seconds ago.
+  Source/forecast/number updates do not move the held shift.
+- Reductions progress from the last final shift by one degree, with a minimum
+  of 25 minutes between steps. At a decision, a tighter target floor can cut
+  the shift immediately. That change starts the 25-minute timer, and further
+  increases begin from the floor-limited shift.
 - The combined request starts with the price reduction and adds any Efficiency
   trim. A falling Price request carries over only the remaining Efficiency
-  addition. A rising Price request can absorb an existing addition, leaving
-  the combined request at the larger of its previous total and the new Price request.
+  addition, which is saved separately across restarts. A rising Price request
+  can absorb an existing addition, leaving the combined request at the larger of its previous total and the new Price request
+  before any new Efficiency adjustment. **Efficiency request** shows the stage
+  total when Efficiency is enabled. **Efficiency addition** shows its extra degrees.
   The forecast still compares the original heating curve with an Efficiency
   curve. The Efficiency curve uses only the addition from the last decision.
 - Efficiency uses Final advice as its operating point and keeps the rolling
@@ -225,7 +233,12 @@ Negative prices and export opportunity costs are retained.
   advice. Without a readback input, Efficiency assumes Final advice is applied.
 - Shared comfort protection requests zero after the shortfall used by the optimizer is ≥0.5°C for
   30 minutes; release needs ten minutes below that level. Missing rooms are
-  also explicitly rejected by the decision rules.
+  also explicitly rejected by the decision rules. If the curve outside probe
+  becomes unavailable, the absolute target is unavailable. Shared protections
+  can still step the shift toward zero.
+- Capacity protection compares the current modeled heat-pump share with the
+  configured capacity in kW. It needs a confirmed model and current demand inputs.
+  It works with Price disabled or an incomplete six-hour tariff forecast.
 - Efficiency backs off its own trim when the current return gap is at or below its low
   limit. More trim requires the lowest eligible gap over 30 minutes to reach
   the high limit.
@@ -242,8 +255,14 @@ Negative prices and export opportunity costs are retained.
   return-gap readings while the defrost sensor reports active. Sampling resumes
   when defrost ends and eligible heating returns. If heating is still paused,
   Efficiency preserves the window for up to 60 seconds after defrost ends.
+  With a mapped defrost sensor, a compressor stop pauses sampling immediately
+  and allows up to 60 seconds for the active defrost signal to arrive. DHW
+  clears space-heating observations.
   After a longer pause, **Warming up** means Efficiency needs more eligible
-  readings before it can add trim.
+  readings before it can add trim. Readiness requires 24 observed minutes in
+  the last 30, including confirmed defrost pauses between eligible readings.
+  At least five actual gap readings and a recent eligible reading are required.
+  Minutes spent waiting for shift confirmation add no gap readings.
 - Settings, method levels, held targets, change times, cache timestamps and matched
   pre-quarter predictions are stored in one integration-owned HA storage record.
 - There are no extra `input_*` helpers or legacy cumulative-COP statistics.
@@ -265,12 +284,17 @@ open its raw configuration editor and paste the file contents. The exported JSON
 is valid YAML. The export does not overwrite an existing dashboard.
 
 Tabs: **Advice · Price · Efficiency · Comfort · Forecast · History · Settings**.
-Advice shows the shared protection states. Comfort shows per-room and maximum
-shortfalls alongside the comfort protection status.
+Advice shows the last decision time and, when a reduction step is pending, the
+earliest scheduled step if conditions persist. Active capacity and frequent
+defrost protections show the measured interval or modeled demand alongside its
+limit. Comfort identifies the included room(s) with the largest limited shortfall.
+The Efficiency timeline aligns heating mode, mapped defrost activity, shift
+confirmation and readiness with compressor-frequency history. Price displays
+the live heat-cost premium to four decimals beside the live price request.
 The Advice tab shows Price at the last decision, the Efficiency addition, the
 combined request, the reduction after protections and the final advice. The
-four totals share a history chart. Heating-target tiles show the original,
-advised and actual heat-pump targets when their readings are available.
+four totals share a history chart. Heating-target tiles show the baseline recorded at the decision,
+the advised target and the reported heat-pump target when their readings are available.
 The Shift confirmation section compares signed advised and reported shifts.
 The exporter resolves actual registered entity IDs, including user renames and
 multiple instances. Re-export after adding/removing rooms or renaming entities.

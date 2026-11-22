@@ -24,9 +24,20 @@ def predicted_cop(outdoor, water, heat_kw, m):
     return clamp(eta*(273.15+water)/max(5., water-outdoor), 1.5, 8.)
 
 
-def heat_demand(indoor, outdoor, pv_kw, stove, m):
-    return max(0., m["heat_loss"]*(indoor-outdoor)-m["solar_gain"]*pv_kw
-               -m["stove_gain"]*stove-m["background_gain"])
+def heating_load(data, outdoor, pv_kw, m):
+    """Return house demand and the heat pump's share, both in kW."""
+    stove_temp = data["stove_temperature"]
+    stove = 0. if stove_temp is None else clamp(
+        (stove_temp-m["stove_idle_c"])/(m["stove_full_c"]-m["stove_idle_c"]), 0, 1)
+    house = max(0., m["heat_loss"]*(data["indoor"]-outdoor) - m["solar_gain"]*pv_kw
+                - m["stove_gain"]*stove - m["background_gain"])
+    ventilation = 0.
+    if (data["ventilation_power"] is not None and data["local_outdoor"] < m["ventilation_space_below"]
+            and outdoor < m["ventilation_space_below"]):
+        fraction = clamp((data["ventilation_power"]*1000-m["ventilation_idle_w"])
+                         /(m["ventilation_full_w"]-m["ventilation_idle_w"]), 0, 1)
+        ventilation = m["ventilation_heat_kw"] * fraction
+    return house, max(0., house - ventilation)
 
 
 def heat_cost(price, pv_kw, other_kw, hp_kw, cop, discount):

@@ -1,6 +1,6 @@
 """Public defaults and input roles. No household-specific configuration."""
 DOMAIN = "heatpump_supplytemp_optimizer"
-VERSION = "2.0.0-beta.6"
+VERSION = "2.0.0-beta.7"
 CONFIG_MINOR_VERSION = 2
 STORAGE_VERSION = 1
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "button"]
@@ -55,7 +55,6 @@ DEFAULT_MODEL = {
     "stove_idle_c": 25., "stove_full_c": 100.,
 }
 SNAPSHOT_VERSION = 1
-FORECAST_SECONDS = 1200
 PV_HOLD_SECONDS = 600
 MIN_STEP_SECONDS = 1500
 DEFROST_RECOVERY_SECONDS = 60

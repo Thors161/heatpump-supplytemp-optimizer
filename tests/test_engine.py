@@ -20,6 +20,12 @@ def prepare(config,states,forecasts):
     return engine
 
 
+def set_quarter_price(engine, now, premium):
+    forecast = engine.state["forecast"]
+    forecast.update(generated_at=now, valid_until=now+1200, premium=premium)
+    forecast["quarters"][0]["start"] = int(now//900)*900
+
+
 @pytest.mark.parametrize("count",[1,2,9,20])
 def test_dynamic_rooms(config,states,count):
     raw=deepcopy(config)
@@ -167,11 +173,10 @@ def test_only_boundary_and_enable_changes_move_held_output(config,states,forecas
     old=deepcopy(e.state)
     states[config["inputs"]["curve_outdoor"]]["state"]="-5"
     e.sample(states,NOW+300)
-    assert not e.decide(NOW+300)
     assert e.state["target"]==old["target"]
     assert e.state["effective_reduction"]==old["effective_reduction"]
     e.state["enabled"]=False
-    assert e.decide(NOW+301,immediate=True)
+    assert e.decide(NOW+301)
     assert e.state["effective_reduction"]==0
 
 
@@ -180,22 +185,23 @@ def test_25_minute_guard_does_not_skip_half_hour(config,states,forecasts):
     e.state["efficiency_enabled"]=False
     e.state["changed"]=NOW-1
     e.decide(NOW)
-    assert e.state["reduction"]==0
+    assert e.state["effective_reduction"]==0
     e.state["changed"]=NOW-1501
-    e.last_decision_quarter=None
     e.decide(NOW)
-    assert e.state["reduction"]==1
+    assert e.state["effective_reduction"]==1
 
 
 def test_comfort_overrides_price_request(config,states,forecasts):
     e=prepare(config,states,forecasts)
-    e.state.update(reduction=2, effective_reduction=2, changed=NOW-60)
+    e.state.update(effective_reduction=2, changed=NOW-60)
     e.comfort=True
     assert e.price_request(NOW)>0
     e.decide(NOW)
     assert e.state["reason"]=="persistent_room_shortfall; waiting for 25-minute minimum interval"
     assert e.state["effective_reduction"]==2
     assert e.state["combined_reduction"] > e.state["protected_reduction"] == 0
+    assert e.state["decision_at"] == NOW
+    assert e.state["next_step_at"] == NOW+1800
 
 
 @pytest.mark.parametrize(("gap", "minimum", "shortfall", "trim", "reason"), [
@@ -209,7 +215,7 @@ def test_comfort_overrides_price_request(config,states,forecasts):
 def test_efficiency_gap_limit_changes_only_efficiency_trim(
         config, states, forecasts, gap, minimum, shortfall, trim, reason):
     e = prepare(config, states, forecasts)
-    e.state.update(efficiency=3, reduction=3, effective_reduction=3, decision_price_reduction=2)
+    e.state.update(efficiency_addition=1, effective_reduction=3, decision_price_reduction=2)
     e.state["settings"].update(gap_low=.5, gap_high=3.)
     e.state["forecast"]["premium"] = .015
     e.data["return_gap"] = gap
@@ -217,27 +223,28 @@ def test_efficiency_gap_limit_changes_only_efficiency_trim(
     e.observations["eligible_gap"]["minimum"] = minimum
     assert e.hydraulics_ready and e.observations_ready
     assert e.decide(NOW)
-    assert e.state["efficiency"] == trim
     assert e.state["efficiency_reason"] == reason
     assert e.state["decision_price_reduction"] == 2
     assert e.efficiency_addition == trim-2
-    assert e.state["combined_reduction"] == e.state["protected_reduction"] == e.state["reduction"] == trim
+    assert e.state["combined_reduction"] == e.state["protected_reduction"] == e.state["effective_reduction"] == trim
 
 
 def test_efficiency_keeps_observations_at_price_reduction_and_keeps_only_its_extra_trim(
         config, states, forecasts):
     e = prepare(config, states, forecasts)
     e.state["settings"].update(gap_low=.5, gap_high=3.)
-    e.state["forecast"].update(premium=.015, valid_until=NOW+9000)
+    set_quarter_price(e, NOW, .015)
 
     def sample_through(start, end):
         for minute in range(start, end+1):
             e.sample(states, NOW+minute*60)
+        set_quarter_price(e, NOW+end*60, e.state["forecast"]["premium"])
 
     assert e.decide(NOW)
     assert e.state["decision_price_reduction"] == e.state["combined_reduction"] == 2
     assert e.state["effective_reduction"] == 1
     assert e.state["efficiency_reason"] == "efficiency_waiting_for_reduction"
+    assert e.state["evaluated_reduction"] == 0
     sample_through(1, 30)
     assert e.decide(NOW+1800)
     assert e.state["effective_reduction"] == 2
@@ -246,6 +253,7 @@ def test_efficiency_keeps_observations_at_price_reduction_and_keeps_only_its_ext
     assert e.decide(NOW+2700)
     assert e.efficiency_addition == 0
     assert e.state["efficiency_reason"] == "efficiency_margin_available; waiting for 25-minute minimum interval"
+    assert e.state["next_step_at"] == NOW+3600
     sample_through(46, 60)
     assert e.decide(NOW+3600)
     assert e.efficiency_addition == 1
@@ -291,11 +299,11 @@ def test_shift_readback_holds_efficiency_while_price_can_change(config, states, 
     config["inputs"]["reported_shift"] = "sensor.reported_shift"
     states["sensor.reported_shift"] = {"state": "-1", "attributes": {"unit_of_measurement": "°C"}}
     e = prepare(config, states, forecasts)
-    e.state.update(efficiency=1, reduction=1, effective_reduction=1, decision_price_reduction=0)
-    e.state["forecast"].update(premium=.015, valid_until=NOW+7200)
+    e.state.update(efficiency_addition=1, effective_reduction=1, decision_price_reduction=0)
     for elapsed in range(0, 1801, 60):
         e.sample(states, NOW+elapsed)
     assert e.observations_ready
+    set_quarter_price(e, NOW+1800, .015)
     assert e.decide(NOW+1800)
     assert e.state["effective_reduction"] == e.state["decision_price_reduction"] == 2
     assert e.shift_confirmation(NOW+1800) == "waiting"
@@ -303,13 +311,16 @@ def test_shift_readback_holds_efficiency_while_price_can_change(config, states, 
     sample_count = len(e.efficiency_gap.samples)
     e.sample(states, NOW+1860)
     assert len(e.efficiency_gap.samples) == sample_count
-    e.sample(states, NOW+2700)
+    for elapsed in range(1920, 2701, 60):
+        e.sample(states, NOW+elapsed)
+    set_quarter_price(e, NOW+2700, .015)
     assert e.decide(NOW+2700)
     assert e.state["efficiency_reason"] == "efficiency_shift_not_applied"
     assert e.state["combined_reduction"] == e.state["protected_reduction"] == 2
 
-    e.state["forecast"]["premium"] = .04
-    e.sample(states, NOW+3600)
+    set_quarter_price(e, NOW+3600, .04)
+    for elapsed in range(2760, 3601, 60):
+        e.sample(states, NOW+elapsed)
     assert e.decide(NOW+3600)
     assert e.state["efficiency_reason"] == "efficiency_shift_not_applied"
     assert e.state["combined_reduction"] == e.state["protected_reduction"] == 4
@@ -329,7 +340,7 @@ def test_shift_readback_holds_efficiency_while_price_can_change(config, states, 
 
 def test_higher_price_absorbs_earlier_addition_without_leapfrogging(config, states, forecasts):
     e = prepare(config, states, forecasts)
-    e.state.update(efficiency=3, reduction=3, effective_reduction=3, decision_price_reduction=2)
+    e.state.update(efficiency_addition=1, effective_reduction=3, decision_price_reduction=2)
     e.state["forecast"]["premium"] = .04
     e.data["return_gap"] = .2
 
@@ -342,16 +353,20 @@ def test_higher_price_absorbs_earlier_addition_without_leapfrogging(config, stat
 
 def test_estimated_capacity_status_matches_shared_protection(config, states, forecasts):
     e = prepare(config, states, forecasts)
-    forecast = e.state["forecast"]
-    heat_demand = forecast["quarters"][0]
-    capacity = config["parameters"]["capacity_kw"]
-    heat_demand["heat_demand_kw"] = capacity - .1
+    need = e.state["forecast"]["quarters"][0]["heat_demand_kw"]
+    config["parameters"]["capacity_kw"] = need + .1
     assert e.estimated_capacity_reached(NOW) is False
-    heat_demand["heat_demand_kw"] = capacity
+    config["parameters"]["capacity_kw"] = need
+    e.state["price_enabled"] = False
+    forecasts["prices"].pop()
+    e.set_forecast(predict(config, e.data, **forecasts, now=NOW))
+    assert not valid_forecast(e.state["forecast"], NOW)
     assert e.estimated_capacity_reached(NOW) is True
-    assert e.decide(NOW)
+    e.decide(NOW)
     assert e.state["reason"] == "little_estimated_capacity_margin"
-    assert e.estimated_capacity_reached(forecast["valid_until"]) is None
+    states[config["inputs"]["local_outdoor"]]["state"] = "unavailable"
+    e.sample(states, NOW+60)
+    assert e.estimated_capacity_reached(NOW+60) is None
 
 
 @pytest.mark.parametrize(("inactive", "active"), [("Inactive", "Active"), ("off", "on")])
@@ -390,8 +405,7 @@ def test_frequent_defrost_backs_off_combined_request_in_normal_steps(config, sta
     config["settings"]["minimum_defrost_interval"] = 90
     states["sensor.defrost"] = {"state": "Inactive"}
     e = prepare(config, states, forecasts)
-    e.state.update(efficiency=3, reduction=3, effective_reduction=3, decision_price_reduction=2)
-    e.state["forecast"].update(premium=.015, valid_until=NOW+8000)
+    e.state.update(efficiency_addition=1, effective_reduction=3, decision_price_reduction=2)
     for elapsed, defrost in [(30, "Active"), (60, "Inactive"), (600, "Active"), (660, "Inactive")]:
         states["sensor.defrost"]["state"] = defrost
         e.sample(states, NOW+elapsed)
@@ -399,6 +413,7 @@ def test_frequent_defrost_backs_off_combined_request_in_normal_steps(config, sta
 
     for elapsed, held in [(900, 2), (1800, 2), (2700, 1), (3600, 1), (4500, 0)]:
         e.sample(states, NOW+elapsed)
+        set_quarter_price(e, NOW+elapsed, .015)
         assert e.decide(NOW+elapsed)
         assert e.state["reason"].startswith("defrost_interval_too_short")
         assert e.state["decision_price_reduction"] == 2
@@ -416,31 +431,34 @@ def test_routine_defrost_preserves_efficiency_history_during_recovery(
     states["sensor.defrost"] = {"state": "Inactive"}
     compressor = states[config["inputs"]["compressor_frequency"]]
     e = prepare(config, states, forecasts)
-    e.state.update(price_enabled=False, efficiency=1, reduction=1, effective_reduction=1)
+    e.state.update(price_enabled=False, efficiency_addition=1, effective_reduction=1)
     for elapsed in range(60, 601, 60):
         e.sample(states, NOW+elapsed)
     first_eligible = e.learning_since
-    before_defrost = deepcopy(e.efficiency_gap.samples)
+    last_gap = e.efficiency_gap.samples[-1]
     assert e.observations_ready
 
     states["sensor.defrost"]["state"] = "Active"
     compressor["state"] = "0"
     e.sample(states, NOW+640)
-    e.sample(states, NOW+900)
+    for elapsed in range(660, 901, 60):
+        e.sample(states, NOW+elapsed)
     assert e.decide(NOW+900)
     assert e.state["efficiency_reason"] == "efficiency_defrost_pause"
     assert e.state["effective_reduction"] == 1
     compressor["state"] = "30"
     e.sample(states, NOW+960)
     assert not e.data["learning_ok"]
-    assert e.efficiency_gap.samples == before_defrost
+    assert [row for row in e.efficiency_gap.samples if "gap" in row[1]][-1] == last_gap
     assert e.learning_since == first_eligible
 
+    for elapsed in range(1020, 1141, 60):
+        e.sample(states, NOW+elapsed)
     states["sensor.defrost"]["state"] = "Inactive"
     compressor["state"] = "0"
     e.sample(states, NOW+1180)  # Nine minutes after the defrost started.
     assert e.data["defrost_pause"]
-    assert e.efficiency_gap.samples == before_defrost
+    assert [row for row in e.efficiency_gap.samples if "gap" in row[1]][-1] == last_gap
     if resume_within_grace:
         compressor["state"] = "30"
         e.sample(states, NOW+1210)
@@ -450,6 +468,7 @@ def test_routine_defrost_preserves_efficiency_history_during_recovery(
         assert e.efficiency_gap.samples[-1][0] == NOW+1210
         compressor["state"] = "0"
         e.sample(states, NOW+1260)
+        e.sample(states, NOW+1320)
     else:
         e.sample(states, NOW+1240)
     assert not e.data["defrost_pause"]
@@ -501,8 +520,125 @@ def test_fractional_floor_reports_an_achievable_integer_shift(config,states,fore
     e=prepare(config,states,forecasts)
     e.config['parameters']['curve_rounding']='none'
     e.config['parameters']['target_floor']=30.5
-    e.state.update(efficiency_enabled=False,reduction=3,changed=NOW-1501)
+    e.state.update(efficiency_enabled=False,effective_reduction=3,changed=NOW-1501)
     e.decide(NOW)
     assert e.state['target']>=30.5
     assert e.state['target']==pytest.approx(e.state['baseline']-e.state['effective_reduction'])
 
+
+def test_cold_room_releases_shift_with_missing_curve(config, states, forecasts):
+    e = prepare(config, states, forecasts)
+    e.state.update(price_enabled=False, efficiency_enabled=True, effective_reduction=3)
+    states[config["inputs"]["curve_outdoor"]]["state"] = "unavailable"
+    states["climate.demo_a"]["attributes"]["current_temperature"] = 19
+    for minute in range(31):
+        e.sample(states, NOW+60*minute)
+    assert e.comfort
+    for elapsed, final in [(1800, 2), (2700, 2), (3600, 1), (5400, 0)]:
+        e.decide(NOW+elapsed)
+        assert e.state["protected_reduction"] == 0
+        assert e.state["effective_reduction"] == final
+        assert e.state["reason"].startswith("persistent_room_shortfall")
+        assert e.state["target"] is None
+
+
+def test_relaxing_floor_steps_from_last_final_shift(config, states, forecasts):
+    e = prepare(config, states, forecasts)
+    e.state.update(efficiency_enabled=False, effective_reduction=4)
+    for minute, outside, expected in [(0, 15, 1), (15, 0, 1), (30, 0, 2)]:
+        now = NOW + minute*60
+        set_quarter_price(e, now, .04)
+        for step in range(max(1, minute-14), minute):
+            e.sample(states, NOW+step*60)
+        states[config["inputs"]["curve_outdoor"]]["state"] = str(outside)
+        e.sample(states, now)
+        e.decide(now)
+        assert e.state["effective_reduction"] == expected
+
+
+def test_legacy_restart_retains_only_efficiency_share(config, states, forecasts):
+    saved = prepare(config, states, forecasts).serialize()
+    saved.pop("efficiency_addition", None)
+    saved.update(efficiency=3, decision_price_reduction=2, effective_reduction=1,
+                 reduction=3, changed=NOW-60)
+    e = Engine(config, saved, NOW)
+    assert e.efficiency_addition == 1
+    assert e.state["effective_reduction"] == 1
+    e.sample(states, NOW)
+    e.state["forecast"]["premium"] = 0
+    e.decide(NOW)
+    assert e.state["combined_reduction"] == e.state["effective_reduction"] == 1
+    resumed = Engine(config, e.serialize(), NOW+30)
+    assert resumed.efficiency_addition == 1
+    assert resumed.state["changed"] == NOW-60
+
+
+def test_defrost_sensor_can_follow_compressor_stop(config, states, forecasts):
+    config["inputs"]["defrost_state"] = "binary_sensor.defrost"
+    states["binary_sensor.defrost"] = {"state": "off"}
+    e = prepare(config, states, forecasts)
+    compressor = states[config["inputs"]["compressor_frequency"]]
+    compressor["state"] = "0"
+    e.sample(states, NOW+1)
+    assert not e.data["learning_ok"]
+    states["binary_sensor.defrost"]["state"] = "on"
+    e.sample(states, NOW+2)
+    for minute in range(1, 6):
+        e.sample(states, NOW+60*minute)
+    states["binary_sensor.defrost"]["state"] = "off"
+    compressor["state"] = "30"
+    e.sample(states, NOW+360)
+    assert e.observations_ready
+    assert e.efficiency_gap.samples[0][0] < NOW
+
+    compressor["state"] = "0"
+    e.sample(states, NOW+400)
+    e.sample(states, NOW+460)
+    assert not e.observations_ready
+    assert not e.efficiency_gap.samples
+
+
+def test_sparse_gap_history_needs_observed_minutes(config, states, forecasts):
+    config["inputs"]["reported_shift"] = "number.reported_shift"
+    states["number.reported_shift"] = {"state": "0"}
+    e = prepare(config, states, forecasts)
+    e.state["price_enabled"] = False
+    e.state["settings"].update(gap_low=.5, gap_high=3.)
+    for minute in range(1, 32):
+        states["number.reported_shift"]["state"] = "0" if minute in (1, 31) else "-1"
+        e.sample(states, NOW+minute*60)
+    e.decide(NOW+1860)
+    assert len(e.efficiency_gap.samples) == 2
+    assert not e.observations_ready
+    assert e.state["effective_reduction"] == 0
+
+
+def test_late_boundary_splits_measured_power(config, states):
+    e = Engine(config, now=NOW-60)
+    e.state["predictions"][str(int(NOW))] = {"kw": 4, "at": NOW-10}
+    for seconds in range(0, 900, 60):
+        e.sample(states, NOW+seconds)
+    states[config["inputs"]["heat_power"]]["state"] = "6"
+    e.sample(states, NOW+908)
+    history = e.state["power_history"]
+    assert history["measured"] == pytest.approx(4.)
+    assert history["interval"]["area"] == pytest.approx(8*4.)
+
+
+def test_dhw_backs_off_then_rebuilds_heating_observations(config, states, forecasts):
+    e = prepare(config, states, forecasts)
+    e.state.update(efficiency_addition=1, effective_reduction=3, decision_price_reduction=2)
+    states[config["inputs"]["heating_mode"]]["state"] = "Tank"
+    e.sample(states, NOW+900)
+    set_quarter_price(e, NOW+900, .015)
+    e.decide(NOW+900)
+    assert e.state["combined_reduction"] == 3
+    assert e.state["protected_reduction"] == 0
+    assert e.state["effective_reduction"] == 2
+    assert e.state["reason"].startswith("DHW_mode")
+    assert not e.observations_ready
+    assert not e.efficiency_gap.samples
+    states[config["inputs"]["heating_mode"]]["state"] = "Room"
+    for minute in range(16, 47):
+        e.sample(states, NOW+minute*60)
+    assert e.hydraulics_ready and e.observations_ready

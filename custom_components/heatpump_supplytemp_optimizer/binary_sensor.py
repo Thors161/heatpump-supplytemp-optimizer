@@ -28,3 +28,14 @@ class OptimizerBinary(OptimizerEntity, BinarySensorEntity):
             "eligible_heating": e.data.get("learning_ok", False),
             "forecast_ready": valid_forecast(e.state["forecast"], now)}[self.key]
 
+    @property
+    def extra_state_attributes(self):
+        e = self.coordinator.engine
+        if self.key == "estimated_capacity_reached":
+            return {"demand_kw": e.current_heat_demand(self.coordinator.data["now"]),
+                    "capacity_kw": e.config["parameters"]["capacity_kw"]}
+        if self.key == "defrost_protection":
+            starts = e.state["defrost_starts"]
+            return {"interval_minutes": (starts[1]-starts[0])/60 if len(starts) == 2 else None,
+                    "minimum_minutes": e.state["settings"]["minimum_defrost_interval"]}
+        return None
