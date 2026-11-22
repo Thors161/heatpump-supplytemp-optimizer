@@ -1,6 +1,6 @@
 """Public defaults and input roles. No household-specific configuration."""
 DOMAIN = "heatpump_supplytemp_optimizer"
-VERSION = "2.0.0-beta.5"
+VERSION = "2.0.0-beta.6"
 CONFIG_MINOR_VERSION = 2
 STORAGE_VERSION = 1
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "button"]
@@ -58,6 +58,7 @@ SNAPSHOT_VERSION = 1
 FORECAST_SECONDS = 1200
 PV_HOLD_SECONDS = 600
 MIN_STEP_SECONDS = 1500
+DEFROST_RECOVERY_SECONDS = 60
 WINDOW_SECONDS = 1800
 MAX_SAMPLE_GAP = 90
 

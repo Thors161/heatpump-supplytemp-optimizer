@@ -408,6 +408,55 @@ def test_frequent_defrost_backs_off_combined_request_in_normal_steps(config, sta
         assert e.state["effective_reduction"] == held
 
 
+@pytest.mark.parametrize("resume_within_grace", [True, False])
+def test_routine_defrost_preserves_efficiency_history_during_recovery(
+        config, states, forecasts, resume_within_grace):
+    config["inputs"]["defrost_state"] = "sensor.defrost"
+    config["settings"]["minimum_defrost_interval"] = 50
+    states["sensor.defrost"] = {"state": "Inactive"}
+    compressor = states[config["inputs"]["compressor_frequency"]]
+    e = prepare(config, states, forecasts)
+    e.state.update(price_enabled=False, efficiency=1, reduction=1, effective_reduction=1)
+    for elapsed in range(60, 601, 60):
+        e.sample(states, NOW+elapsed)
+    first_eligible = e.learning_since
+    before_defrost = deepcopy(e.efficiency_gap.samples)
+    assert e.observations_ready
+
+    states["sensor.defrost"]["state"] = "Active"
+    compressor["state"] = "0"
+    e.sample(states, NOW+640)
+    e.sample(states, NOW+900)
+    assert e.decide(NOW+900)
+    assert e.state["efficiency_reason"] == "efficiency_defrost_pause"
+    assert e.state["effective_reduction"] == 1
+    compressor["state"] = "30"
+    e.sample(states, NOW+960)
+    assert not e.data["learning_ok"]
+    assert e.efficiency_gap.samples == before_defrost
+    assert e.learning_since == first_eligible
+
+    states["sensor.defrost"]["state"] = "Inactive"
+    compressor["state"] = "0"
+    e.sample(states, NOW+1180)  # Nine minutes after the defrost started.
+    assert e.data["defrost_pause"]
+    assert e.efficiency_gap.samples == before_defrost
+    if resume_within_grace:
+        compressor["state"] = "30"
+        e.sample(states, NOW+1210)
+        assert e.learning_since == first_eligible
+        assert e.observations_ready
+        assert not e.data["defrost_pause"]
+        assert e.efficiency_gap.samples[-1][0] == NOW+1210
+        compressor["state"] = "0"
+        e.sample(states, NOW+1260)
+    else:
+        e.sample(states, NOW+1240)
+    assert not e.data["defrost_pause"]
+    assert not e.efficiency_gap.samples
+    assert e.learning_since is None
+
+
 def test_dhw_excluded_from_cop_and_pause_negative_heat_included():
     r=Rolling()
     for i in range(31):

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0-beta.6
+
+- Pause Efficiency through routine defrosts without clearing its observation
+  window. Allow up to 60 seconds after defrost for heating to resume.
+
 ## 2.0.0-beta.5
 
 - Keep eligible return-gap observations across ordinary changes in advised shift.

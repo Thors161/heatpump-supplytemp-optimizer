@@ -40,6 +40,8 @@ DESCRIPTIONS = {'advice_disabled': 'The advisor is disabled; final reduction is 
                                  'reduction is being recovered.',
  'efficiency_defrost_hold': 'Efficiency holds its addition while frequent defrost protection '
                             'limits the final reduction.',
+ 'efficiency_defrost_pause': 'Efficiency holds its addition during defrost and the brief return '
+                             'to heating. Recent eligible readings are kept.',
  'efficiency_settings_invalid': 'Settings must satisfy low gap < high gap and room margin < '
                                 'recovery shortfall.',
  'efficiency_inputs_unavailable': 'Required room, water or outside-temperature inputs are missing '

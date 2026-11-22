@@ -1,7 +1,7 @@
 """Advisory state machine. Never sends commands to heating equipment."""
 from copy import deepcopy
 from math import floor
-from .const import MAX_SAMPLE_GAP, MIN_STEP_SECONDS, ROOM_SHORTFALL_RISE, SETTINGS, SNAPSHOT_VERSION
+from .const import DEFROST_RECOVERY_SECONDS, MAX_SAMPLE_GAP, MIN_STEP_SECONDS, ROOM_SHORTFALL_RISE, SETTINGS, SNAPSHOT_VERSION
 from .forecast import valid_forecast
 from .inputs import read_inputs
 from .model import clamp, curve, price_level
@@ -77,6 +77,7 @@ class Engine:
             else []
         )
         self._defrost_active = None
+        self._defrost_ended_at = None
         self._shift_mismatch_since = None
         self._shortfall_sample_times = {}
         self.general = Rolling(saved.get("samples", []))
@@ -105,12 +106,21 @@ class Engine:
         self._limit_room_shortfalls(now)
         self._observe_defrost(d["defrost_state"], now)
         self._observe_shift(now)
+        defrost_pause = d["space_mode"] and (
+            self._defrost_active is True
+            or (not d["learning_ok"] and self._defrost_ended_at is not None
+                and 0 <= now-self._defrost_ended_at < DEFROST_RECOVERY_SECONDS)
+        )
+        d["defrost_pause"] = defrost_pause
+        d["learning_ok"] = d["learning_ok"] and not defrost_pause
+        frequent_defrost = self.defrost_protection(now)
         can_observe_efficiency = (d["learning_ok"] and d["curve_outdoor"] is not None
-                                  and not self.defrost_protection(now))
-        if not can_observe_efficiency:
+                                  and not frequent_defrost)
+        if not can_observe_efficiency and (not defrost_pause or frequent_defrost):
             self.efficiency_gap.samples.clear()
         self.space_since = (self.space_since if self.space_since is not None else now) if d["space_ok"] else None
-        self.learning_since = (self.learning_since if self.learning_since is not None else now) if d["learning_ok"] else None
+        if not defrost_pause:
+            self.learning_since = (self.learning_since if self.learning_since is not None else now) if d["learning_ok"] else None
         self.power.add(now, {"heat": d["heat_power"] if d["cop_ok"] else None,
                              "electric": d["electric_total"] if d["cop_ok"] else None})
         self._update_power_history(now)
@@ -170,10 +180,14 @@ class Engine:
             if self._defrost_active is False and (not starts or now > starts[-1]):
                 self.state["defrost_starts"] = [*starts[-1:], now]
             self._defrost_active = True
+            self._defrost_ended_at = None
         elif state in {"off", "inactive"}:
+            if self._defrost_active is True:
+                self._defrost_ended_at = now
             self._defrost_active = False
         else:
             self._defrost_active = None
+            self._defrost_ended_at = None
 
     def defrost_protection(self, now):
         starts = self.state["defrost_starts"]
@@ -354,6 +368,8 @@ class Engine:
             wanted, reason = recovery, "efficiency_capacity_recovery"
         elif defrost:
             reason = "efficiency_defrost_hold"
+        elif d["defrost_pause"]:
+            reason = "efficiency_defrost_pause"
         elif not (0 <= cfg["gap_low"] < cfg["gap_high"] and 0 <= cfg["room_margin"] < cfg["room_recovery"]):
             reason = "efficiency_settings_invalid"
         elif not d["space_ok"] or not d["rooms_ok"] or d["local_outdoor"] is None or d["curve_outdoor"] is None:

@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.5**.
+This is **2.0.0-beta.6**.
 
 ## Installation
 
@@ -213,8 +213,9 @@ Negative prices and export opportunity costs are retained.
   curve. The Efficiency curve uses only the addition from the last decision.
 - Efficiency uses Final advice as its operating point and keeps the rolling
   return-gap history through ordinary shift and weather changes. Compressor
-  pauses and invalid heating inputs can still interrupt observations. The
-  optional actual heat-pump target is available for display and history.
+  stops outside defrost and invalid heating inputs can still interrupt
+  observations. The optional actual heat-pump target is available for display
+  and history.
 - Map the optional **Reported shift** input to the equipment's signed curve
   shift. Unitless values are interpreted as degrees Celsius. During space
   heating, a mismatch pauses Efficiency adjustments and excludes new gap samples.
@@ -237,6 +238,12 @@ Negative prices and export opportunity costs are retained.
   safeguard requests zero reduction. It clears once there has been no new start
   for that interval. A single observed start leaves the safeguard off. Advice
   moves toward zero using the usual one-degree steps and 25-minute minimum.
+- **Defrost pause** means Efficiency holds its addition and keeps recent
+  return-gap readings while the defrost sensor reports active. Sampling resumes
+  when defrost ends and eligible heating returns. If heating is still paused,
+  Efficiency preserves the window for up to 60 seconds after defrost ends.
+  After a longer pause, **Warming up** means Efficiency needs more eligible
+  readings before it can add trim.
 - Settings, method levels, held targets, change times, cache timestamps and matched
   pre-quarter predictions are stored in one integration-owned HA storage record.
 - There are no extra `input_*` helpers or legacy cumulative-COP statistics.
