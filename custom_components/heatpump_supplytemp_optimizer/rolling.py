@@ -20,16 +20,16 @@ class Rolling:
             self.samples.pop(0)
         self.samples = self.samples[-4000:]
 
-    def changes(self, key, timestamp):
+    def changes(self, key, timestamp, *, defrost_pause=False):
         window = [(t, v) for t, v in self.samples if timestamp-WINDOW_SECONDS <= t <= timestamp]
         rows = [(t, v[key]) for t, v in window if numeric(v.get(key)) is not None]
         if len(rows) < 2:
             return dict(ready=False, change=None, minimum=None, coverage=0.)
-        # These windows receive one sample per minute. Only observed defrost pauses
-        # between eligible readings may account for missing heating minutes.
-        paused = sum(1 for t, v in window if rows[0][0] < t < rows[-1][0] and v.get("defrost"))
+        # An already-ready window may use ongoing defrost markers until heating resumes.
+        end = window[-1][0] if defrost_pause else rows[-1][0]
+        paused = sum(1 for t, v in window if t <= end and v.get("defrost"))
         coverage = min(1., (len(rows) + paused) * 60 / WINDOW_SECONDS)
-        return dict(ready=coverage >= .8 and len(rows) >= 5 and timestamp-rows[-1][0] <= MAX_SAMPLE_GAP,
+        return dict(ready=coverage >= .8 and len(rows) >= 5 and timestamp-end <= MAX_SAMPLE_GAP,
                     change=rows[-1][1]-rows[0][1], minimum=min(v for t, v in rows), coverage=coverage)
 
     def integral(self, key, timestamp, *, require_all=False):

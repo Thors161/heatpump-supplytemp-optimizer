@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0-beta.8
+
+- Add independent comfort and frequent-defrost protection switches and an adjustable comfort shortfall threshold to Settings.
+- Keep eligible heating observations between frequent defrost cycles and preserve readiness during short defrosts.
+
 ## 2.0.0-beta.7
 
 - Store Efficiency trim separately from Price and step from the last final shift.

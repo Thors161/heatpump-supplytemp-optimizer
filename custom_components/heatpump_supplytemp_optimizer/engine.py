@@ -16,7 +16,7 @@ class Engine:
         default_rise, rise_low, rise_high, _, _ = ROOM_SHORTFALL_RISE
         default_rises = {room["id"]: room.get("max_shortfall_rise", default_rise) for room in config["rooms"]}
         self.state = dict(version=SNAPSHOT_VERSION, enabled=False, price_enabled=False,
-                          efficiency_enabled=True, efficiency_addition=0,
+                          efficiency_enabled=True, efficiency_addition=0, comfort_enabled=True, defrost_enabled=True,
                           effective_reduction=0, target=None, baseline=None,
                           decision_price_reduction=None, combined_reduction=None, protected_reduction=None,
                           decision_at=None, next_step_at=None, evaluated_reduction=None,
@@ -31,7 +31,7 @@ class Engine:
         for key in self.state:
             if key in saved:
                 self.state[key] = deepcopy(saved[key])
-        for flag in ["enabled", "price_enabled", "efficiency_enabled"]:
+        for flag in ["enabled", "price_enabled", "efficiency_enabled", "comfort_enabled", "defrost_enabled"]:
             self.state[flag] = self.state[flag] is True
         if "efficiency_addition" not in saved:
             # Earlier snapshots stored Efficiency's request including its Price share.
@@ -96,6 +96,7 @@ class Engine:
         self._heating_pause_since = None
         self.space_since = self.learning_since = None
         self.comfort_since = self.comfort_clear_since = None
+        self._comfort_threshold = self.state["settings"]["comfort_threshold"]
         self.comfort = False
         self.hydraulics_ready = self.observations_ready = False
         self.observations = {}
@@ -122,12 +123,18 @@ class Engine:
                 other=d["other_power"]))
             self.last_sample_minute = minute
         self.observations = {k: self.general.changes(k, now) for k in ["gap", "deficit"]}
-        self.observations["eligible_gap"] = self.efficiency_gap.changes("gap", now)
+        self.observations["eligible_gap"] = self.efficiency_gap.changes(
+            "gap", now, defrost_pause=d["defrost_pause"] and self.observations_ready)
         self.hydraulics_ready = (self.space_since is not None and now-self.space_since >= 1800
                                 and self.observations["gap"]["ready"])
         self.observations_ready = (self.learning_since is not None and now-self.learning_since >= 300
                                   and all(self.observations[k]["ready"] for k in ["eligible_gap", "deficit"]))
-        shortfall = not d["rooms_ok"] or d["limited_max_deficit"] >= .5
+        threshold = self.state["settings"]["comfort_threshold"]
+        if threshold != self._comfort_threshold:
+            self.comfort_since = self.comfort_clear_since = None
+            self.comfort = False
+            self._comfort_threshold = threshold
+        shortfall = not d["rooms_ok"] or d["limited_max_deficit"] >= threshold
         if shortfall:
             self.comfort_clear_since = None
             self.comfort_since = self.comfort_since if self.comfort_since is not None else now
@@ -167,7 +174,7 @@ class Engine:
             self.learning_since = now
 
         eligible = d["learning_ok"] and d["curve_outdoor"] is not None
-        if ordinary_stop or self.defrost_protection(now) or (not eligible and not paused):
+        if ordinary_stop or (not eligible and not paused):
             self.efficiency_gap.samples.clear()
         elif new_minute:
             if eligible and self.shift_confirmation(now) in ("unconfigured", "confirmed"):
@@ -218,10 +225,14 @@ class Engine:
             self._defrost_active = None
             self._defrost_ended_at = None
 
+    @property
+    def comfort_protection(self):
+        return self.state["comfort_enabled"] and self.comfort
+
     def defrost_protection(self, now):
         starts = self.state["defrost_starts"]
         threshold = self.state["settings"]["minimum_defrost_interval"] * 60
-        return (len(starts) == 2 and starts[1] - starts[0] < threshold
+        return (self.state["defrost_enabled"] and len(starts) == 2 and starts[1] - starts[0] < threshold
                 and 0 <= now - starts[1] < threshold)
 
     def _observe_shift(self, now):
@@ -368,7 +379,7 @@ class Engine:
             return 0, "DHW_mode" if d["dhw_mode"] else "invalid_water_measurements"
         if not d["rooms_ok"]:
             return 0, "room_data_missing: " + ", ".join(d["room_missing"])
-        if self.comfort:
+        if self.comfort_protection:
             return 0, "persistent_room_shortfall"
         if capacity:
             return 0, "little_estimated_capacity_margin"
@@ -417,7 +428,7 @@ class Engine:
         confirmation = self.shift_confirmation(now)
         if not enabled:
             wanted, reason = 0, "efficiency_disabled"
-        elif self.comfort:
+        elif self.comfort_protection:
             wanted, reason = recovery, "efficiency_comfort_recovery"
         elif capacity:
             wanted, reason = recovery, "efficiency_capacity_recovery"

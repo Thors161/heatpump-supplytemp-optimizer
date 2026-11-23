@@ -193,6 +193,15 @@ async def test_switch_and_number_persist_across_unload_reload(hass,config,states
     await hass.services.async_call('number','set_value',{'entity_id':defrost_interval,'value':45},blocking=True)
     switch=registry.async_get_entity_id('switch',DOMAIN,entry.entry_id+'_enabled')
     await hass.services.async_call('switch','turn_on',{'entity_id':switch},blocking=True)
+    decision = entry.runtime_data.engine.state["decision_at"]
+    protections = [registry.async_get_entity_id("switch", DOMAIN, entry.entry_id+"_"+key)
+                   for key in ("comfort_enabled", "defrost_enabled")]
+    for entity in protections:
+        assert hass.states.is_state(entity, "on")
+        await hass.services.async_call("switch", "turn_off", {"entity_id": entity}, blocking=True)
+    threshold = registry.async_get_entity_id("number", DOMAIN, entry.entry_id+"_comfort_threshold")
+    await hass.services.async_call("number", "set_value", {"entity_id": threshold, "value": .8}, blocking=True)
+    assert entry.runtime_data.engine.state["decision_at"] == decision
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     assert entry.runtime_data.engine.state['enabled'] is True
@@ -201,6 +210,8 @@ async def test_switch_and_number_persist_across_unload_reload(hass,config,states
     assert entry.runtime_data.engine.state['shortfall_rise_limits']['room_a']==1.0
     assert float(hass.states.get(rise_limit).state)==1.0
     assert float(hass.states.get(defrost_interval).state)==45
+    assert all(hass.states.is_state(entity, 'off') for entity in protections)
+    assert float(hass.states.get(threshold).state) == .8
 
 
 async def test_state_and_parameter_updates_do_not_recalculate_between_boundaries(hass,config,states):

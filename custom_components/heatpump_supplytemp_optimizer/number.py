@@ -4,7 +4,7 @@ from homeassistant.helpers.entity import EntityCategory
 from .const import ROOM_SHORTFALL_RISE, SETTINGS
 from .entity import OptimizerEntity
 
-NAMES = {"gap_high":"High return gap", "gap_low":"Low return gap", "room_margin":"Room margin for more trim",
+NAMES = {"comfort_threshold":"Comfort shortfall threshold", "gap_high":"High return gap", "gap_low":"Low return gap", "room_margin":"Room margin for more trim",
     "room_recovery":"Room shortfall for recovery", "minimum_defrost_interval":"Minimum defrost interval",
     "shift_confirmation_grace":"Shift confirmation grace period"}
 

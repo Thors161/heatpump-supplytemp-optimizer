@@ -14,7 +14,9 @@ def build_dashboard(entities, rooms, *, defrost_entity=None):
         result = dict(type="tile", entity=entity(key), name=name, grid_options={"columns":6,"rows":2})
         if color:
             result["color"] = color
-        if key in ["enabled", "price_enabled", "efficiency_enabled"]:
+        if key in ["comfort_shortfall", "defrost_protection"]:
+            result["state_content"] = ["status"]
+        if key in ["enabled", "price_enabled", "efficiency_enabled", "comfort_enabled", "defrost_enabled"]:
             result["features"] = [{"type":"toggle"}]
         return result
     def text(content):
@@ -109,7 +111,7 @@ def build_dashboard(entities, rooms, *, defrost_entity=None):
 {% if not is_number(maximum) %}Waiting for included room readings.
 {% elif rooms %}**Largest limited shortfall:** {{ rooms | join(', ') | e }} · {{ maximum | float | round(2) }} °C
 {% else %}Included rooms have no shortfall.{% endif %}""".replace("SHORTFALL", entity("limited_room_deficit"))),
-            text("Protection applies to both methods when the shortfall used by the optimizer is at least 0.5°C for 30 minutes. It clears after 10 minutes below 0.5°C."),
+            text("When enabled, protection requests zero reduction after 30 minutes at or above the configured threshold of {{ states('"+entity("comfort_threshold")+"') }} °C. It clears after 10 minutes below that threshold."),
             history("Maximum room shortfall", [
                 ("max_room_deficit","Raw",P["original"]), ("adjusted_room_deficit","After allowances","#dc6676"),
                 ("limited_room_deficit","Used by optimizer",P["actual"])])),
@@ -175,16 +177,18 @@ return result;""".replace("FIELD",key)
         text("Power comparisons use predictions made before each complete quarter. DHW, startup partial quarters and invalid gaps are excluded. Predicted/measured power is thermal kW, not electrical power or measured savings."))])
     settings=view("Settings","settings",[
         section("General",*controls,tile("refresh_forecast","Refresh forecast"),tile("export_dashboard","Export dashboard")),
-        section("Room comfort · both methods",editable("Extra allowed shortfall",[("room_allowance_"+r["id"],r["name"]) for r in rooms]),
+        section("Room comfort · both methods",tile("comfort_enabled","Enable comfort protection"),
+            editable("Comfort protection threshold",[("comfort_threshold","Comfort shortfall threshold")]),
+            editable("Extra allowed shortfall",[("room_allowance_"+r["id"],r["name"]) for r in rooms]),
             editable("Maximum shortfall rise",[("room_max_shortfall_rise_"+r["id"],r["name"]) for r in rooms]),
             text("The allowance is subtracted before limiting the rise. Set a room's rise limit to 0 to disable it. A limit of 1°C/h allows up to 0.5°C of increase in 30 minutes. The demand model uses actual room temperatures.")),
         section("Efficiency · adjustable",editable("Hydraulic & comfort thresholds",[("gap_high","High gap"),("gap_low","Low gap"),("room_margin","Room margin for more trim"),("room_recovery","Room shortfall for recovery")]),
             editable("Shift readback",[("shift_confirmation_grace","Shift confirmation grace period")]),
             text("The 30-minute minimum eligible gap must reach the high limit for more trim. A current gap at or below the low limit backs off efficiency trim. Require low < high and room margin < recovery.")),
-        section("Frequent defrost protection",
+        section("Frequent defrost protection",tile("defrost_enabled","Enable frequent defrost protection"),
             editable("Defrost timing",[("minimum_defrost_interval","Minimum time between starts")]),
             text("With a defrost sensor configured, two starts less than this many minutes apart request zero reduction. The protection clears after that many minutes without a new start. Set 0 to disable it.")),
         section("Price · fixed thresholds",text("Comparison: current heat cost minus the next-six-hour median.\n\n| Premium EUR/kWh heat | Request |\n|:--|--:|\n| ≤0.005 | 0°C |\n| >0.005 to 0.010 | 1°C |\n| >0.010 to 0.020 | 2°C |\n| >0.020 to 0.030 | 3°C |\n| >0.030 | 4°C |\n\nThe configured maximum and target floor still apply. Change source mappings, rooms, model, curve and export discount under the integration's configuration options.")),
-        section("Shared timing",text("Normal decisions: :00/:15/:30/:45. Enable changes are immediate. One-degree steps are separated by at least 25 minutes. Comfort requires a shortfall of at least 0.5°C for 30 minutes and clears after 10 minutes below that level. Hydraulic hold lasts at most 30 minutes. Settings and source changes take effect at the next normal decision."))])
+        section("Shared timing",text("Normal decisions: :00/:15/:30/:45. Advisor and method switches trigger immediate decisions. Protection switches update status immediately and affect the next decision. One-degree steps are separated by at least 25 minutes. Comfort requires a shortfall of at or above the configured threshold for 30 minutes and clears after 10 minutes below that level. Hydraulic hold lasts at most 30 minutes. Settings and source changes take effect at the next normal decision."))])
     return dict(title="Heat Pump Optimizer",views=[advice,price,efficiency,comfort,forecast,past,settings])
 

@@ -1,6 +1,6 @@
 """Public defaults and input roles. No household-specific configuration."""
 DOMAIN = "heatpump_supplytemp_optimizer"
-VERSION = "2.0.0-beta.7"
+VERSION = "2.0.0-beta.8"
 CONFIG_MINOR_VERSION = 2
 STORAGE_VERSION = 1
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "button"]
@@ -21,7 +21,14 @@ OPTIONAL_ROLES = {
     "stove_temperature": "temperature", "weather": "weather", "defrost_state": "mode",
 }
 ROLES = REQUIRED_ROLES | OPTIONAL_ROLES
+SWITCHES = {
+    "enabled": "Advisor enabled", "price_enabled": "Price reduction enabled",
+    "efficiency_enabled": "Efficiency trim enabled",
+    "comfort_enabled": "Comfort protection enabled",
+    "defrost_enabled": "Frequent defrost protection enabled",
+}
 SETTINGS = {
+    "comfort_threshold": (.5, .1, 2., .1, "°C"),
     "gap_high": (6.0, 0, 15, .1, "°C"),
     "gap_low": (4.0, 0, 15, .1, "°C"),
     "room_margin": (.2, 0, 1, .1, "°C"),

@@ -171,7 +171,8 @@ class OptimizerCoordinator(DataUpdateCoordinator):
             self.engine.state[key] = bool(enabled)
             now = dt_util.utcnow().timestamp()
             self.engine.sample(self.snapshot(), now)
-            self.engine.decide(now)
+            if key in ("enabled", "price_enabled", "efficiency_enabled"):
+                self.engine.decide(now)
             await self.store.async_save(self.engine.serialize())
             self.publish()
 

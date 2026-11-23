@@ -23,7 +23,7 @@ class OptimizerBinary(OptimizerEntity, BinarySensorEntity):
             return e.estimated_capacity_reached(now)
         if self.key == "defrost_protection":
             return e.defrost_protection(now)
-        return {"comfort_shortfall": e.comfort, "hydraulics_ready": e.hydraulics_ready,
+        return {"comfort_shortfall": e.comfort_protection, "hydraulics_ready": e.hydraulics_ready,
             "observations_ready": e.observations_ready,
             "eligible_heating": e.data.get("learning_ok", False),
             "forecast_ready": valid_forecast(e.state["forecast"], now)}[self.key]
@@ -31,11 +31,18 @@ class OptimizerBinary(OptimizerEntity, BinarySensorEntity):
     @property
     def extra_state_attributes(self):
         e = self.coordinator.engine
+        if self.key == "comfort_shortfall":
+            status = "Disabled" if not e.state["comfort_enabled"] else "Active" if self.is_on else "Monitoring"
+            return {"status": status}
         if self.key == "estimated_capacity_reached":
             return {"demand_kw": e.current_heat_demand(self.coordinator.data["now"]),
                     "capacity_kw": e.config["parameters"]["capacity_kw"]}
         if self.key == "defrost_protection":
             starts = e.state["defrost_starts"]
-            return {"interval_minutes": (starts[1]-starts[0])/60 if len(starts) == 2 else None,
+            enabled = e.state["defrost_enabled"] and e.state["settings"]["minimum_defrost_interval"] > 0
+            status = "Disabled" if not enabled else "Active" if self.is_on else "Monitoring"
+            if enabled and not e.config["inputs"].get("defrost_state"):
+                status = "No defrost sensor"
+            return {"status": status, "interval_minutes": (starts[1]-starts[0])/60 if len(starts) == 2 else None,
                     "minimum_minutes": e.state["settings"]["minimum_defrost_interval"]}
         return None

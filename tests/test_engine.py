@@ -642,3 +642,49 @@ def test_dhw_backs_off_then_rebuilds_heating_observations(config, states, foreca
     for minute in range(16, 47):
         e.sample(states, NOW+minute*60)
     assert e.hydraulics_ready and e.observations_ready
+
+
+def test_repeated_defrost_keeps_ready_window_while_protection_holds(config, states, forecasts):
+    config["inputs"]["defrost_state"] = "sensor.defrost"
+    config["settings"]["minimum_defrost_interval"] = 45
+    states["sensor.defrost"] = {"state": "Inactive"}
+    e = prepare(config, states, forecasts)
+    e.state["price_enabled"] = False
+    for minute in range(1, 93):
+        active = (minute-1) % 42 < 8
+        states["sensor.defrost"]["state"] = "Active" if active else "Inactive"
+        states[config["inputs"]["compressor_frequency"]]["state"] = "0" if active else "30"
+        now = NOW + minute*60
+        e.sample(states, now)
+        assert e.observations_ready, (minute, e.observations, e.learning_since)
+        assert e.data["learning_ok"] == (not active)
+        if minute >= 43 and minute % 15 == 0:
+            e.decide(now)
+            assert e.state["protected_reduction"] == 0
+            assert e.state["reason"].startswith("defrost_interval_too_short")
+
+
+def test_independent_protections_track_while_disabled(config, states, forecasts):
+    config["inputs"]["defrost_state"] = "binary_sensor.defrost"
+    states["binary_sensor.defrost"] = {"state": "off"}
+    e = prepare(config, states, forecasts)
+    e.state.update(comfort_enabled=False, defrost_enabled=False, price_enabled=False)
+    e.state["settings"]["minimum_defrost_interval"] = 50
+    states["climate.demo_a"]["attributes"]["current_temperature"] = 19
+    for minute in range(61):
+        now = NOW + 60*minute
+        if minute == 29:
+            e.state["settings"]["comfort_threshold"] = 1.
+        states["binary_sensor.defrost"]["state"] = "on" if minute in (10, 50) else "off"
+        e.sample(states, now)
+        assert not e.comfort_protection and not e.defrost_protection(now)
+        assert e.comfort == (minute >= 59)
+        if minute in (10, 50):
+            assert e.data["defrost_pause"]
+    for comfort, defrost, reason in [(True, True, "persistent_room_shortfall"),
+                                     (False, True, "defrost_interval_too_short"),
+                                     (True, False, "persistent_room_shortfall")]:
+        e.state.update(comfort_enabled=comfort, defrost_enabled=defrost)
+        e.decide(now)
+        assert e.state["reason"].startswith(reason)
+        assert e.state["protected_reduction"] == 0

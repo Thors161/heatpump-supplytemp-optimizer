@@ -1,13 +1,12 @@
 """Integration-owned advice toggles. These never control the heat pump relay."""
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.exceptions import HomeAssistantError
+from .const import SWITCHES
 from .entity import OptimizerEntity
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    async_add_entities([OptimizerSwitch(entry.runtime_data, key, name) for key, name in [
-        ("enabled", "Advisor enabled"), ("price_enabled", "Price reduction enabled"),
-        ("efficiency_enabled", "Efficiency trim enabled")]])
+    async_add_entities([OptimizerSwitch(entry.runtime_data, key, name) for key, name in SWITCHES.items()])
 
 
 class OptimizerSwitch(OptimizerEntity, SwitchEntity):

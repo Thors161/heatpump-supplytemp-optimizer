@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.7**.
+This is **2.0.0-beta.8**.
 
 ## Installation
 
@@ -202,7 +202,7 @@ Negative prices and export opportunity costs are retained.
 
 ## Decisions and restart handling
 
-- Normal decisions run at :00/:15/:30/:45. Only the three enable switches cause
+- Normal decisions run at :00/:15/:30/:45. Only the Advisor, Price and Efficiency enable switches cause
   immediate decisions. Price uses a forecast whose first slot matches the
   decision quarter. At a boundary the coordinator waits for an in-progress
   refresh and can refresh even if the previous quarter was fetched seconds ago.
@@ -231,7 +231,8 @@ Negative prices and export opportunity costs are retained.
   **Shift confirmation grace period**, which defaults to five minutes. Price
   continues independently, and the shared safeguards still control the final
   advice. Without a readback input, Efficiency assumes Final advice is applied.
-- Shared comfort protection requests zero after the shortfall used by the optimizer is ≥0.5°C for
+- Settings includes independent **Enable comfort protection** and **Enable frequent defrost protection** switches, both on by default. Status changes immediately and final advice responds at the next decision. Room timers and defrost starts continue to be tracked while disabled. Editing the comfort threshold restarts its qualification timer.
+- Shared comfort protection requests zero after the shortfall used by the optimizer reaches the configured **Comfort shortfall threshold** (default 0.5°C, range 0.1–2.0°C) for
   30 minutes; release needs ten minutes below that level. Missing rooms are
   also explicitly rejected by the decision rules. If the curve outside probe
   becomes unavailable, the absolute target is unavailable. Shared protections
@@ -259,8 +260,11 @@ Negative prices and export opportunity costs are retained.
   and allows up to 60 seconds for the active defrost signal to arrive. DHW
   clears space-heating observations.
   After a longer pause, **Warming up** means Efficiency needs more eligible
-  readings before it can add trim. Readiness requires 24 observed minutes in
-  the last 30, including confirmed defrost pauses between eligible readings.
+  readings before it can add trim. Frequent-defrost protection holds back advice
+  while eligible heating between cycles continues to count. An already-ready
+  window can count observed minutes during the current defrost.
+  Readiness requires 24 observed minutes in
+  the last 30, including observed defrost pauses retained in the window.
   At least five actual gap readings and a recent eligible reading are required.
   Minutes spent waiting for shift confirmation add no gap readings.
 - Settings, method levels, held targets, change times, cache timestamps and matched

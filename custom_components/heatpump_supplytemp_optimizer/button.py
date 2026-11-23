@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from homeassistant.components.button import ButtonEntity
 from homeassistant.helpers import entity_registry as er
-from .const import DOMAIN, SETTINGS
+from .const import DOMAIN, SETTINGS, SWITCHES
 from .dashboard import build_dashboard
 from .entity import OptimizerEntity
 from .sensor import SENSORS
@@ -26,7 +26,7 @@ class OptimizerButton(OptimizerEntity, ButtonEntity):
         rooms = c.config["rooms"]
         platform_keys={"sensor":list(SENSORS)+[prefix+r["id"] for r in rooms
                                               for prefix in ("room_shortfall_", "room_limited_shortfall_")],
-                       "binary_sensor":list(DEFINITIONS),"switch":["enabled","price_enabled","efficiency_enabled"],
+                       "binary_sensor":list(DEFINITIONS),"switch":list(SWITCHES),
                        "number":list(SETTINGS)+[prefix+r["id"] for r in rooms
                                               for prefix in ("room_allowance_", "room_max_shortfall_rise_")],
                        "button":["refresh_forecast","export_dashboard"]}
