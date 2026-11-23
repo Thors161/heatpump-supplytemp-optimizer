@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0-beta.9
+
+- Use consistent colors for master advice, efficiency, price and protections across dashboard controls and graphs.
+- Chart the efficiency addition separately from the combined request and compare advised and reported shifts.
+
 ## 2.0.0-beta.8
 
 - Add independent comfort and frequent-defrost protection switches and an adjustable comfort shortfall threshold to Settings.

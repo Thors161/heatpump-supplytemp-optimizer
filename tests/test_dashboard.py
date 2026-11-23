@@ -21,7 +21,7 @@ def test_large_homes_split_native_room_graphs_at_eight_entities():
         assert len({row['entity'] for c in charts for row in c['entities']})==20
 
 
-def test_advice_shows_stages_in_decision_order_and_charts_only_totals():
+def test_advice_colors_decision_tiles_and_history_consistently():
     advice = next(v for v in generated(1)["views"] if v["path"] == "advice")
     stages = advice["sections"][0]["cards"]
     assert [c["entity"] for c in stages if c["type"] == "tile"] == [
@@ -32,9 +32,12 @@ def test_advice_shows_stages_in_decision_order_and_charts_only_totals():
     history = next(c for s in advice["sections"] for c in s["cards"]
                    if c.get("title") == "Temperature reductions")
     assert [row["entity"] for row in history["entities"]] == [
-        "sensor.test_decision_price_reduction", "sensor.test_combined_reduction",
+        "sensor.test_decision_price_reduction", "sensor.test_efficiency_addition", "sensor.test_combined_reduction",
         "sensor.test_protected_reduction", "sensor.test_effective_reduction",
     ]
+    expected = ["#8b5cf6", "#22a447", "#8b949e", "#e54848", "#eabf12"]
+    assert [c["color"] for c in stages if c["type"] == "tile"] == expected
+    assert [row["color"] for row in history["entities"]] == expected
 
 
 def test_forecast_only_uses_custom_graphs_and_gap_axes_remain_fixed():

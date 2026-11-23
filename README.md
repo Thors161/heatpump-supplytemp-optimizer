@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.8**.
+This is **2.0.0-beta.9**.
 
 ## Installation
 
@@ -296,10 +296,11 @@ The Efficiency timeline aligns heating mode, mapped defrost activity, shift
 confirmation and readiness with compressor-frequency history. Price displays
 the live heat-cost premium to four decimals beside the live price request.
 The Advice tab shows Price at the last decision, the Efficiency addition, the
-combined request, the reduction after protections and the final advice. The
-four totals share a history chart. Heating-target tiles show the baseline recorded at the decision,
+combined request, the reduction after protections and the final advice. The history chart shows all five values.
+Yellow marks the advisor and final advice, purple marks price, green marks efficiency,
+and red marks protections. Gray identifies the combined subtotal and baseline. Heating-target tiles show the baseline recorded at the decision,
 the advised target and the reported heat-pump target when their readings are available.
-The Shift confirmation section compares signed advised and reported shifts.
+The Shift confirmation section compares signed advised and reported shifts, with both plotted in target history.
 The exporter resolves actual registered entity IDs, including user renames and
 multiple instances. Re-export after adding/removing rooms or renaming entities.
 Large room graphs are split into groups of eight for native HA card limits.
