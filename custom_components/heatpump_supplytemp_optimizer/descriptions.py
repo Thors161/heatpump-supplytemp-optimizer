@@ -60,6 +60,8 @@ DESCRIPTIONS = {'advice_disabled': 'The advisor is disabled; final reduction is 
                                 'requests one degree less reduction.',
  'efficiency_low_gap_no_addition': 'The return gap is at or below the low limit. There is no extra '
                                    'Efficiency reduction to withdraw.',
+ 'efficiency_holds_released_price': 'Price requested less reduction. The room and return-gap readings '
+                                   'allow Efficiency to keep the shift already in effect.',
  'efficiency_waiting_for_reduction': 'Waiting for the advised reduction to reach the pending request '
                                       'before adding trim.',
  'efficiency_waiting_for_shift': 'Waiting for the heat pump to report the advised shift.',

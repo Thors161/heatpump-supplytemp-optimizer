@@ -433,6 +433,7 @@ class Engine:
         current = max(0, s["efficiency_addition"] - price_rise)
         wanted, reason = current, "efficiency_hold"
         applied = s["effective_reduction"]
+        price_handoff = price < previous_price and price + current < applied <= maximum
         recovery = max(0, current - 1)
         confirmation = self.shift_confirmation(now)
         if not enabled:
@@ -468,7 +469,7 @@ class Engine:
             wanted, reason = recovery, "efficiency_low_gap_recovery" if current else "efficiency_low_gap_no_addition"
         elif price + current > maximum:
             reason = "efficiency_temperature_floor"
-        elif price + current != applied:
+        elif price + current != applied and not price_handoff:
             reason = "efficiency_waiting_for_reduction"
         elif not self.observations_ready:
             reason = "efficiency_observations_warming_up"
@@ -476,6 +477,10 @@ class Engine:
             reason = "efficiency_room_margin_insufficient"
         elif obs["eligible_gap"]["minimum"] < cfg["gap_high"]:
             reason = "efficiency_margin_inconclusive"
+        elif price_handoff:
+            # Ownership changes at the existing shift; no physical step or timer reset.
+            s.update(efficiency_addition=applied-price, efficiency_reason="efficiency_holds_released_price")
+            return False
         elif applied >= self.config["parameters"]["maximum_reduction"]:
             reason = "efficiency_maximum_reduction"
         elif applied >= maximum:

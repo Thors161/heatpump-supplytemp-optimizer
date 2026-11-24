@@ -1,6 +1,6 @@
 """Public defaults and input roles. No household-specific configuration."""
 DOMAIN = "heatpump_supplytemp_optimizer"
-VERSION = "2.0.0-beta.10"
+VERSION = "2.0.0-beta.11"
 CONFIG_MINOR_VERSION = 2
 STORAGE_VERSION = 1
 PLATFORMS = ["sensor", "binary_sensor", "switch", "number", "button"]

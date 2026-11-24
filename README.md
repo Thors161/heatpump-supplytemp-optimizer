@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.10**.
+This is **2.0.0-beta.11**.
 
 ## Installation
 
@@ -212,8 +212,11 @@ Negative prices and export opportunity costs are retained.
   the shift immediately. That change starts the 25-minute timer, and further
   increases begin from the floor-limited shift.
 - The combined request starts with the price reduction and adds any Efficiency
-  trim. A falling Price request carries over only the remaining Efficiency
-  addition, which is saved separately across restarts. A rising Price request
+  trim. When Price drops below the reduction in effect, Efficiency can take over
+  the remainder if its normal checks for adding trim pass. This keeps the same
+  target and step timer. For example, if Price drops to zero while a 3°C
+  reduction is in effect, Efficiency can hold those 3°C. Otherwise the usual
+  recovery and step rules apply. The addition is saved across restarts. A rising Price request
   can absorb an existing addition, leaving the combined request at the larger of its previous total and the new Price request
   before any new Efficiency adjustment. **Efficiency request** shows the stage
   total when Efficiency is enabled. **Efficiency addition** shows its extra degrees.

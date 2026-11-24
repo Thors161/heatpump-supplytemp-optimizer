@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.0-beta.11
+
+- Let Efficiency keep an eligible reduction when Price drops, preserving the applied shift and its step timer.
+
 ## 2.0.0-beta.10
 
 - Add a Savings tab comparing the original curve, combined target and measured operation for matched space-heating quarters.

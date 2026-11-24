@@ -229,7 +229,7 @@ def test_efficiency_gap_limit_changes_only_efficiency_trim(
     assert e.state["combined_reduction"] == e.state["protected_reduction"] == e.state["effective_reduction"] == trim
 
 
-def test_efficiency_keeps_observations_at_price_reduction_and_keeps_only_its_extra_trim(
+def test_efficiency_keeps_observations_and_takes_over_released_price(
         config, states, forecasts):
     e = prepare(config, states, forecasts)
     e.state["settings"].update(gap_low=.5, gap_high=3.)
@@ -263,8 +263,9 @@ def test_efficiency_keeps_observations_at_price_reduction_and_keeps_only_its_ext
     sample_through(61, 90)
     assert e.decide(NOW+5400)
     assert e.state["decision_price_reduction"] == 0
-    assert e.efficiency_addition == e.state["combined_reduction"] == 1
-    assert e.state["effective_reduction"] == 2
+    assert e.efficiency_addition == e.state["combined_reduction"] == 3
+    assert e.state["effective_reduction"] == 3
+    assert e.state["efficiency_reason"] == "efficiency_holds_released_price"
 
 
 def test_efficiency_uses_advised_shift_through_reported_target_changes(config, states, forecasts):
@@ -336,6 +337,61 @@ def test_shift_readback_holds_efficiency_while_price_can_change(config, states, 
     states["sensor.reported_shift"]["state"] = "-3"
     e.sample(states, NOW+3780)
     assert e.shift_confirmation(NOW+3780) == "confirmed"
+
+
+def prepare_price_handoff(config, states, forecasts, old_price, applied):
+    config["inputs"]["reported_shift"] = "sensor.shift"
+    states["sensor.shift"] = {"state": str(-applied), "attributes": {"unit_of_measurement": "°C"}}
+    e = Engine(config, now=NOW-3600)
+    e.state.update(enabled=True, price_enabled=True, decision_price_reduction=old_price,
+                   effective_reduction=applied, changed=NOW-900)
+    e.state["settings"].update(gap_low=.8, gap_high=1.5)
+    for minute in range(-60, 1):
+        e.sample(states, NOW+minute*60)
+    e.set_forecast(predict(config,e.data,**forecasts,now=NOW))
+    assert e.observations_ready
+    return e
+
+
+@pytest.mark.parametrize(("old_price", "applied", "premium", "new_price"), [
+    (4, 4, .008, 1),  # Retaining the configured maximum is allowed.
+    (4, 2, .008, 1),  # Price had requested more than was ever applied.
+    (1, 3, 0., 0),    # The shift was still unwinding from an earlier Price drop.
+])
+def test_eligible_price_handoff_preserves_shift_and_timer(
+        config, states, forecasts, old_price, applied, premium, new_price):
+    e = prepare_price_handoff(config, states, forecasts, old_price, applied)
+    set_quarter_price(e, NOW, premium)
+    e.decide(NOW)
+    assert e.state["decision_price_reduction"] == new_price
+    assert e.efficiency_addition == applied-new_price, e.state["efficiency_reason"]
+    assert e.state["combined_reduction"] == e.state["effective_reduction"] == applied
+    assert e.state["changed"] == NOW-900 and e.state["efficiency_changed"] == 0
+    assert e.state["efficiency_reason"] == "efficiency_holds_released_price"
+
+    e.decide(NOW+1)
+    assert e.state["effective_reduction"] == applied
+    assert e.efficiency_addition == applied-new_price, e.state["efficiency_reason"]
+
+
+@pytest.mark.parametrize("blocker", ["shortfall", "gap", "comfort", "readback", "floor"])
+def test_price_handoff_requires_eligible_shift(config, states, forecasts, blocker):
+    e = prepare_price_handoff(config, states, forecasts, 3, 3)
+    e.state["changed"] = NOW-1800
+    states["sensor.shift"]["state"] = "-1" if blocker == "readback" else "-3"
+    e.sample(states, NOW)
+    if blocker == "shortfall":
+        e.data["limited_max_deficit"] = .3
+    elif blocker == "gap":
+        e.observations["eligible_gap"]["minimum"] = 1.4
+    elif blocker == "comfort":
+        e.comfort = True
+    elif blocker == "floor":
+        config["parameters"]["target_floor"] = curve(e.data["curve_outdoor"], config["parameters"], integer=True)-2
+    set_quarter_price(e, NOW, 0.)
+    e.decide(NOW)
+    assert e.efficiency_addition == e.state["combined_reduction"] == 0
+    assert e.state["effective_reduction"] == 2
 
 
 def test_higher_price_absorbs_earlier_addition_without_leapfrogging(config, states, forecasts):
