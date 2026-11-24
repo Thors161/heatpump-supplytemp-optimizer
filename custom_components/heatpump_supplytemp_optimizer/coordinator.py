@@ -1,6 +1,7 @@
 """HA state subscriptions, read-only forecasts and atomic local persistence."""
 import asyncio
 import logging
+from zoneinfo import ZoneInfo
 from homeassistant.core import callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event, async_track_time_change
@@ -32,7 +33,7 @@ class OptimizerCoordinator(DataUpdateCoordinator):
     async def async_initialize(self):
         saved = await self.store.async_load()
         now = dt_util.utcnow().timestamp()
-        self.engine = Engine(self.config, saved, now)
+        self.engine = Engine(self.config, saved, now, tz=ZoneInfo(self.hass.config.time_zone))
         self.engine.sample(self.snapshot(), now)
         self.publish()
 

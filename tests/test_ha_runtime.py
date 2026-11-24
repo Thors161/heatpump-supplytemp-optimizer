@@ -133,11 +133,19 @@ async def test_dashboard_export_resolves_real_ids_and_native_graphs(hass,config,
     path=Path(hass.config.path(f'{DOMAIN}_dashboard_{entry.entry_id}.yaml'))
     dashboard=json.loads(path.read_text())
     assert [view['path'] for view in dashboard['views']]==[
-        'advice','price','efficiency','comfort','forecast','history','settings']
+        'advice','savings','price','efficiency','comfort','forecast','history','settings']
+    savings = dashboard['views'][1]
+    for key, unit in [('saved_kwh','kWh'), ('saved_eur','EUR')]:
+        entity = registry.async_get_entity_id('sensor',DOMAIN,entry.entry_id+'_'+key)
+        attrs = hass.states.get(entity).attributes
+        assert attrs['unit_of_measurement'] == unit and attrs['state_class'] == 'total'
+    coverage = savings['sections'][-1]['cards'][-1]['content']
+    rendered = Template(coverage, hass).async_render(parse_result=False)
+    assert 'partial today' in rendered and 'advised' in rendered
     for view in dashboard['views']:
         for section in view['sections']:
             for card in section['cards']:
-                if view['path']!='forecast':assert not card['type'].startswith('custom:')
+                if view['path'] not in ('forecast','savings'):assert not card['type'].startswith('custom:')
                 if 'entity' in card:
                     assert registry.async_get(card['entity']) is not None
                 for row in card.get('entities',[]):

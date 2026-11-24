@@ -29,3 +29,16 @@ for(const c of charts)for(const s of c.series){
  count++;
 }
 console.log(`Forecast: ${charts.length} graphs / ${count} series; valid coverage, expiry, missing and negative values passed.`);
+
+const savings=dashboard.views.find(v=>v.path==='savings');
+const bars=savings.sections.flatMap(s=>s.cards).filter(c=>c.type==='custom:apexcharts-card');
+assert.equal(bars.length,2);
+for(const [i,card] of bars.entries()){
+  const day={start:900,baseline_kwh:1.5,actual_kwh:1,baseline_eur:-0.03,actual_eur:-0.02};
+  const values=card.series.map(s=>{
+    assert.equal(s.type,'column');
+    return new Function('entity',s.data_generator)({attributes:{days:{test:day}}});
+  });
+  assert.deepEqual(values, i===0 ? [[[900000,1.5]],[[900000,1]]] : [[[900000,-0.03]],[[900000,-0.02]]]);
+}
+console.log('Savings: both paired daily bar charts passed.');

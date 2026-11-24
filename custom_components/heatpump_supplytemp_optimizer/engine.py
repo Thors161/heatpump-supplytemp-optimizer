@@ -1,16 +1,18 @@
 """Advisory state machine. Never sends commands to heating equipment."""
 from copy import deepcopy
+from datetime import timezone
 from math import ceil, floor
 from .const import DEFROST_RECOVERY_SECONDS, MAX_SAMPLE_GAP, MIN_STEP_SECONDS, ROOM_SHORTFALL_RISE, SNAPSHOT_VERSION
 from .forecast import valid_forecast
 from .inputs import read_inputs
 from .model import clamp, curve, heating_load, price_level
 from .rolling import Rolling
+from .savings import Savings, rates
 from .schema import numeric
 
 
 class Engine:
-    def __init__(self, config, saved=None, now=0):
+    def __init__(self, config, saved=None, now=0, *, tz=timezone.utc):
         self.config = config
         saved = saved if isinstance(saved, dict) and saved.get("version") == SNAPSHOT_VERSION else {}
         default_rise, rise_low, rise_high, _, _ = ROOM_SHORTFALL_RISE
@@ -25,7 +27,7 @@ class Engine:
                           pv_cache={}, settings=dict(config["settings"]), allowances={},
                           shortfall_rise_limits={}, limited_shortfalls={},
                           defrost_starts=[],
-                          forecast={}, power_history={}, predictions={},
+                          forecast={}, power_history={}, predictions={}, savings={},
                           default_settings=dict(config["settings"]),
                           default_allowances={r["id"]: r["allowance"] for r in config["rooms"]})
         for key in self.state:
@@ -42,7 +44,7 @@ class Engine:
         for key in ["changed", "efficiency_changed", "hold_until"]:
             self.state[key] = numeric(self.state[key]) or 0.
         for key in ["pv_cache", "settings", "allowances", "shortfall_rise_limits", "limited_shortfalls",
-                    "forecast", "power_history", "predictions"]:
+                    "forecast", "power_history", "predictions", "savings"]:
             if not isinstance(self.state[key], dict):
                 self.state[key] = {}
         for key, default in config["settings"].items():
@@ -89,6 +91,7 @@ class Engine:
         self.efficiency_gap = Rolling()
         # An outage must not be interpolated as a measured heating interval.
         self.power = Rolling()
+        self.savings = Savings(self.state["savings"], tz)
         self.started = now
         self.data = {}
         self.forecast_attempt = 0.
@@ -117,6 +120,7 @@ class Engine:
         self.power.add(now, {"heat": d["heat_power"] if d["cop_ok"] else None,
                              "electric": d["electric_total"] if d["cop_ok"] else None})
         self._update_power_history(now)
+        self._observe_savings(now)
         if minute != self.last_sample_minute:
             self.general.add(now, dict(gap=d["return_gap"] if d["space_ok"] else None,
                 deficit=d["limited_max_deficit"] if d["rooms_ok"] and d["space_mode"] else None,
@@ -234,6 +238,10 @@ class Engine:
         threshold = self.state["settings"]["minimum_defrost_interval"] * 60
         return (self.state["defrost_enabled"] and len(starts) == 2 and starts[1] - starts[0] < threshold
                 and 0 <= now - starts[1] < threshold)
+
+    def _observe_savings(self, now):
+        sample = rates(self.data, self.config, self.state, self._defrost_active)
+        self.savings.observe(now, sample)
 
     def _observe_shift(self, now):
         if self.shift_confirmation(now) in ("waiting", "not_applied"):
@@ -355,6 +363,7 @@ class Engine:
         s["combined_reduction"] = price + self.efficiency_addition
         wanted, reason = self._protect(now, forecast_ok, capacity, defrost)
         self._apply_shift(now, wanted, reason, base, maximum)
+        self._observe_savings(now)
         eligible_at = None
         if s["effective_reduction"] != s["protected_reduction"]:
             eligible_at = s["changed"] + MIN_STEP_SECONDS

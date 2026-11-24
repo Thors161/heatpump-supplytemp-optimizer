@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.9**.
+This is **2.0.0-beta.10**.
 
 ## Installation
 
@@ -287,7 +287,7 @@ The button's attributes show the exact filename. Create a dedicated dashboard,
 open its raw configuration editor and paste the file contents. The exported JSON
 is valid YAML. The export does not overwrite an existing dashboard.
 
-Tabs: **Advice · Price · Efficiency · Comfort · Forecast · History · Settings**.
+Tabs: **Advice · Savings · Price · Efficiency · Comfort · Forecast · History · Settings**.
 Advice shows the last decision time and, when a reduction step is pending, the
 earliest scheduled step if conditions persist. Active capacity and frequent
 defrost protections show the measured interval or modeled demand alongside its
@@ -304,8 +304,31 @@ The Shift confirmation section compares signed advised and reported shifts, with
 The exporter resolves actual registered entity IDs, including user renames and
 multiple instances. Re-export after adding/removing rooms or renaming entities.
 Large room graphs are split into groups of eight for native HA card limits.
-Return gap is fixed at −10°C to +10°C. Forecast charts retain ApexCharts; all
-other graphs are native. Graph history starts when the entities are installed.
+Return gap is fixed at −10°C to +10°C. Forecast charts and daily Savings bars use ApexCharts. Other graphs are native. Graph history starts when the entities are installed.
+
+### Savings
+
+Savings compares the same **measured space heat** at the original weather curve and at
+the final shift after Price, Efficiency and protections. The two modeled COP and
+EUR/kWh-heat lines use the COP model at each target. The actual lines use measured
+thermal and electrical energy. Each point is a ratio of quarter-hour totals.
+
+Daily bars compare actual electricity with the estimated electricity at the original
+curve. To cancel COP model bias, original compressor electricity is measured compressor
+electricity multiplied by modeled combined COP divided by modeled original COP.
+The estimate equals actual consumption at zero shift. Backup electricity is carried
+on both sides. Defrost and non-producing intervals carry their measured electricity
+on both sides and retain signed measured heat. Each side is priced using the observed
+import tariff and displaced solar exports. Signed cumulative kWh and EUR savings
+start with the first matched quarter and persist across restarts. These estimate
+the effect of water temperature for the same heat, excluding load-shifting savings.
+
+The coverage table shows matched hours for each local day. Only complete observed
+space-heating quarters with a confirmed model, heat, power, weather-curve temperature,
+local temperature and pricing data count. Solar production also requires household
+load data. Restart gaps, mixed DHW quarters and mismatched nonzero shifts are excluded.
+With no readback mapping the comparison uses the final advised shift and identifies
+that basis on the tab. A missing configured readback makes that interval unmatched.
 
 ## Migrating an existing package
 

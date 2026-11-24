@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.0-beta.10
+
+- Add a Savings tab comparing the original curve, combined target and measured operation for matched space-heating quarters.
+- Track daily electricity and cost comparisons, matched hours and cumulative estimated kWh and EUR savings.
+
 ## 2.0.0-beta.9
 
 - Use consistent colors for master advice, efficiency, price and protections across dashboard controls and graphs.

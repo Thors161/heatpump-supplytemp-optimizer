@@ -106,6 +106,39 @@ def build_dashboard(entities, rooms, *, defrost_entity=None):
             history("Shift", [("advised_shift","Advised shift"), ("reported_shift","Reported shift")])),
         section("State history",history("Decision states",[("decision","Decision"),("price_state","Price"),("efficiency_reason","Efficiency")]),
             history("Controls & forecast",[("enabled","Advisor"),("price_enabled","Price"),("efficiency_enabled","Efficiency"),("forecast","Forecast")]))])
+    def daily_bars(title, field, unit):
+        series = []
+        for side, name, color in (("baseline", "Original curve · estimated", BASELINE),
+                                  ("actual", "Actual", MEASURED)):
+            key = side+"_"+field
+            series.append(dict(entity=entity("saved_kwh"), name=name, color=color, unit=unit,
+                type="column", float_precision=2, data_generator=(
+                    "return Object.values(entity.attributes.days || {}).map(d => "
+                    f"[d.start * 1000, d.{key}]).sort((a,b) => a[0]-b[0]);")))
+        return dict(type="custom:apexcharts-card", section_mode=True, graph_span="7d",
+                    span={"end":"day"}, header={"show":True,"title":title}, series=series,
+                    grid_options={"columns":"full","rows":6})
+
+    coverage = """{% set days = state_attr('LEDGER','days') or {} %}
+**Matched space heating** · shift basis: {{ state_attr('LEDGER','shift_basis') or 'waiting' }}
+
+| Local day | Matched hours |
+|:--|--:|
+{% for offset in range(6,-1,-1) %}{% set date = (now().date() - timedelta(days=offset)).isoformat() %}| {{ date }}{{ ' (partial today)' if offset == 0 else '' }} | {{ (days.get(date,{}).get('quarters',0) / 4) | round(2) }} |
+{% endfor %}
+Bars compare only these hours. DHW, missing readings and unverified shifts leave gaps."""
+    savings = view("Savings", "savings", [
+        section("Estimated savings for the same delivered heat",
+            tile("saved_kwh","Electricity saved"), tile("saved_eur","Electricity cost saved"),
+            text("Signed totals since installation. The original curve estimates the electricity needed "
+                 "for the same measured space heat. Actual cost includes imported power and solar export value.")),
+        section("Matched space-heating quarters",
+            history("COP", [("original_cop","Original curve · modeled",BASELINE),
+                            ("combined_cop","Combined target · modeled",MASTER),("actual_cop","Measured",MEASURED)]),
+            history("Heat cost · EUR/kWh heat", [("original_unit_cost","Original curve · modeled",BASELINE),
+                    ("combined_unit_cost","Combined target · modeled",MASTER),("actual_unit_cost","Actual",MEASURED)])),
+        section("Daily comparison", daily_bars("Electrical energy · kWh","kwh","kWh"),
+                daily_bars("Electricity cost · EUR","eur","EUR"), text(coverage.replace("LEDGER",entity("saved_kwh"))))])
     price = view("Price","price",[
         section("Price decision",tile("heat_cost_premium_6h","Live heat-cost premium"),tile("price_reduction","Live price request"),
             tile("current_heat_cost","Heat cost now"),tile("reference_heat_cost","Next 6h median"),tile("effective_reduction","Final advice"),
@@ -211,5 +244,5 @@ return result;""".replace("FIELD",key)
             text("With a defrost sensor configured, two starts less than this many minutes apart request zero reduction. The protection clears after that many minutes without a new start. Set 0 to disable it.")),
         section("🟣 Price · fixed thresholds",text("Comparison: current heat cost minus the next-six-hour median.\n\n| Premium EUR/kWh heat | Request |\n|:--|--:|\n| ≤0.005 | 0°C |\n| >0.005 to 0.010 | 1°C |\n| >0.010 to 0.020 | 2°C |\n| >0.020 to 0.030 | 3°C |\n| >0.030 | 4°C |\n\nThe configured maximum and target floor still apply. Change source mappings, rooms, model, curve and export discount under the integration's configuration options.")),
         section("Shared timing",text("Normal decisions: :00/:15/:30/:45. Advisor and method switches trigger immediate decisions. Protection switches update status immediately and affect the next decision. One-degree steps are separated by at least 25 minutes. Comfort requires a shortfall of at or above the configured threshold for 30 minutes and clears after 10 minutes below that level. Hydraulic hold lasts at most 30 minutes. Settings and source changes take effect at the next normal decision."))])
-    return dict(title="Heat Pump Optimizer",views=[advice,price,efficiency,comfort,forecast,past,settings])
+    return dict(title="Heat Pump Optimizer",views=[advice,savings,price,efficiency,comfort,forecast,past,settings])
 

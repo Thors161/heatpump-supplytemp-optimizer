@@ -40,12 +40,12 @@ def test_advice_colors_decision_tiles_and_history_consistently():
     assert [row["color"] for row in history["entities"]] == expected
 
 
-def test_forecast_only_uses_custom_graphs_and_gap_axes_remain_fixed():
+def test_only_forecast_and_savings_use_custom_graphs_and_gap_axes_remain_fixed():
     d=generated(2)
     for view in d['views']:
         for section in view['sections']:
             for card in section['cards']:
-                if view['path']!='forecast':assert not card['type'].startswith('custom:')
+                if view['path'] not in ('forecast','savings'):assert not card['type'].startswith('custom:')
                 if card.get('title','').startswith('Return gap ·'):
                     assert (card['min_y_axis'],card['max_y_axis'],card['fit_y_data'])==(-10,10,False)
 

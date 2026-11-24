@@ -1,8 +1,10 @@
 """Advice, observations and per-room diagnostics. No writable equipment entities."""
+from copy import deepcopy
 from homeassistant.components.sensor import SensorEntity, SensorStateClass, SensorDeviceClass
 from .entity import OptimizerEntity
 from .forecast import valid_forecast
 from .model import curve
+from .savings import SCENARIOS
 from .descriptions import describe
 
 # key: (name, unit, device class). Unit conversions happen before these values.
@@ -56,6 +58,15 @@ SENSORS = {
     "predicted_heating_power": ("Predicted space-heating power", "kW", "power"),
     "measured_heating_power": ("Measured matched space-heating power", "kW", "power"),
 }
+SENSORS.update({
+    "saved_kwh": ("Estimated electricity saved", "kWh", "energy"),
+    "saved_eur": ("Estimated electricity cost saved", "EUR", "monetary"),
+})
+for scenario in SCENARIOS:
+    label = scenario.capitalize()
+    SENSORS[scenario+"_cop"] = (label+" matched COP", None, None)
+    SENSORS[scenario+"_unit_cost"] = (label+" matched heat cost", "EUR/kWh", None)
+SAVINGS_RATIOS = {scenario+suffix for scenario in SCENARIOS for suffix in ("_cop", "_unit_cost")}
 COP_KEYS = {"measured_cop_30m", "predicted_cop", "original_curve_cop"}
 FORECAST_KEYS = {"current_heat_cost":"current_cost", "reference_heat_cost":"reference_cost",
     "heat_cost_premium_6h":"premium", "original_curve_heat_cost":"original_current_cost",
@@ -77,9 +88,12 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
         self._attr_native_unit_of_measurement = unit
         if device_class:
             self._attr_device_class = SensorDeviceClass(device_class)
-        if unit or key in COP_KEYS:
+        if unit or key in COP_KEYS or key in SAVINGS_RATIOS:
             self._attr_state_class = SensorStateClass.MEASUREMENT
             self._attr_suggested_display_precision = 2 if unit == "EUR/kWh" else 1
+        if key in ("saved_kwh", "saved_eur"):
+            self._attr_state_class = SensorStateClass.TOTAL
+            self._attr_suggested_display_precision = 2
         if key == "heat_cost_premium_6h":
             self._attr_suggested_display_precision = 4
 
@@ -88,6 +102,13 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
         e, key = self.coordinator.engine, self.key
         s, d, p = e.state, e.data, e.config["parameters"]
         now = self.coordinator.data["now"]
+        if key in ("saved_kwh", "saved_eur"):
+            return s["savings"].get(key, 0.)
+        if key in SAVINGS_RATIOS:
+            ledger = s["savings"]
+            if ledger.get("last_quarter") == int(now//900)*900-900:
+                return ledger["ratios"].get(key)
+            return None
         if key == "baseline_temperature":
             return curve(d["curve_outdoor"], p, integer=True) if d.get("curve_outdoor") is not None else None
         if key == "decision_baseline":
@@ -156,6 +177,9 @@ class OptimizerSensor(OptimizerEntity, SensorEntity):
     @property
     def extra_state_attributes(self):
         e = self.coordinator.engine
+        if self.key == "saved_kwh":
+            return {"days": deepcopy(e.state["savings"].get("days", {})),
+                    "shift_basis": "reported" if "reported_shift" in e.config["inputs"] else "advised"}
         if self.key in ["decision", "efficiency_reason", "price_state"]:
             description = describe(self.native_value)
             if self.key == "decision":

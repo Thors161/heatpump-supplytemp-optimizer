@@ -40,12 +40,17 @@ def heating_load(data, outdoor, pv_kw, m):
     return house, max(0., house - ventilation)
 
 
-def heat_cost(price, pv_kw, other_kw, hp_kw, cop, discount):
+def electricity_cost_rate(price, pv_kw, other_kw, hp_kw, discount):
+    """Incremental electricity bill in EUR/hour, including displaced exports."""
     before = other_kw-pv_kw
     after = before+hp_kw
     def bill(net):
         return max(0., net)*price-max(0., -net)*(price-discount)
-    return (bill(after)-bill(before))/(hp_kw*cop)
+    return bill(after)-bill(before)
+
+
+def heat_cost(price, pv_kw, other_kw, hp_kw, cop, discount):
+    return electricity_cost_rate(price, pv_kw, other_kw, hp_kw, discount)/(hp_kw*cop)
 
 
 def price_level(premium):
