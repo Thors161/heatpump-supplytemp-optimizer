@@ -438,6 +438,9 @@ class Engine:
         wanted, reason = current, "efficiency_hold"
         applied = s["effective_reduction"]
         price_handoff = price < previous_price and price + current < applied <= maximum
+        shortfall = d["limited_max_deficit"]
+        needs_room_recovery = (shortfall > cfg["room_recovery"] if price_handoff
+                               else shortfall >= cfg["room_recovery"]-.000001)
         recovery = max(0, current - 1)
         confirmation = self.shift_confirmation(now)
         if not enabled:
@@ -466,7 +469,7 @@ class Engine:
                 "not_applied": "efficiency_shift_not_applied",
                 "unavailable": "efficiency_shift_readback_unavailable",
             }[confirmation]
-        elif d["limited_max_deficit"] >= cfg["room_recovery"]-.000001:
+        elif needs_room_recovery:
             wanted = recovery
             reason = "efficiency_room_shortfall_recovery" if current else "efficiency_room_shortfall_no_addition"
         elif d["return_gap"] <= cfg["gap_low"]:
@@ -477,7 +480,7 @@ class Engine:
             reason = "efficiency_waiting_for_reduction"
         elif not self.observations_ready:
             reason = "efficiency_observations_warming_up"
-        elif d["limited_max_deficit"] > cfg["room_margin"]+.000001 or obs["deficit"]["change"] > .1+.000001:
+        elif (not price_handoff and shortfall > cfg["room_margin"]+.000001) or obs["deficit"]["change"] > .1+.000001:
             reason = "efficiency_room_margin_insufficient"
         elif obs["eligible_gap"]["minimum"] < cfg["gap_high"]:
             reason = "efficiency_margin_inconclusive"

@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.13**.
+This is **2.0.0-beta.14**.
 
 ## Installation
 
@@ -213,7 +213,9 @@ Negative prices and export opportunity costs are retained.
   increases begin from the floor-limited shift.
 - The combined request starts with the price reduction and adds any Efficiency
   trim. When Price drops below the reduction in effect, Efficiency can take over
-  the remainder if its normal checks for adding trim pass. This keeps the same
+  the remainder with a room shortfall up to and including the configured recovery
+  threshold. Adding a new degree still requires the tighter room margin. Both
+  actions require the gap, readiness and shortfall-trend checks to pass. A handoff keeps the same
   target and step timer. For example, if Price drops to zero while a 3°C
   reduction is in effect, Efficiency can hold those 3°C. Otherwise the usual
   recovery and step rules apply. The addition is saved across restarts. A rising Price request

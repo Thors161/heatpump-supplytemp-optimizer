@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.0-beta.14
+
+- Allow Efficiency to take over an applied Price reduction up to and including the configured room recovery threshold. New trim still requires the tighter room margin.
+
 ## 2.0.0-beta.13
 
 - Count valid space-heating samples in partial quarters for Savings graphs and totals, including across restarts.

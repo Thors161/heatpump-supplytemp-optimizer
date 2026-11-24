@@ -17,7 +17,7 @@ def check(release=False,private_profile=None):
     manifest=json.loads((path/'manifest.json').read_text())
     assert path.name==manifest['domain']=='heatpump_supplytemp_optimizer'
     assert manifest['config_flow'] is True
-    assert manifest['version']=='2.0.0-beta.13'
+    assert manifest['version']=='2.0.0-beta.14'
     assert json.loads((ROOT/'hacs.json').read_text())['homeassistant']=='2026.11.0'
     for name in ['__init__.py','config_flow.py','sensor.py','binary_sensor.py','switch.py','number.py','button.py','strings.json','translations/en.json']:
         assert (path/name).is_file(),name

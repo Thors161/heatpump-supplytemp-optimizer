@@ -238,7 +238,7 @@ return result;""".replace("FIELD",key)
             text("The allowance is subtracted before limiting the rise. Set a room's rise limit to 0 to disable it. A limit of 1°C/h allows up to 0.5°C of increase in 30 minutes. The demand model uses actual room temperatures.")),
         section("🟢 Efficiency settings",editable("Hydraulic & comfort thresholds",[("gap_high","High gap"),("gap_low","Low gap"),("room_margin","Room margin for more trim"),("room_recovery","Room shortfall for recovery")]),
             editable("Shift readback",[("shift_confirmation_grace","Shift confirmation grace period")]),
-            text("The 30-minute minimum eligible gap must reach the high limit for more trim. A current gap at or below the low limit backs off efficiency trim. Require low < high and room margin < recovery.")),
+            text("The 30-minute minimum eligible gap must reach the high limit for more trim. A current gap at or below the low limit backs off efficiency trim. A Price handoff allows shortfall up to and including recovery. Adding another degree requires the room margin. Require low < high and room margin < recovery.")),
         section("🔴 Frequent defrost protection",tile("defrost_enabled","Enable frequent defrost protection"),
             editable("Defrost timing",[("minimum_defrost_interval","Minimum time between starts")]),
             text("With a defrost sensor configured, two starts less than this many minutes apart request zero reduction. The protection clears after that many minutes without a new start. Set 0 to disable it.")),

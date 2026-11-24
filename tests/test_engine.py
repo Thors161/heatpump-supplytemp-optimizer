@@ -374,6 +374,29 @@ def test_eligible_price_handoff_preserves_shift_and_timer(
     assert e.efficiency_addition == applied-new_price, e.state["efficiency_reason"]
 
 
+@pytest.mark.parametrize(("shortfall", "trend", "old_price", "recovery", "addition"), [
+    (.1, 0., 2, .5, 1),       # New trim at the margin.
+    (.2, 0., 2, .5, 0),       # New trim above the margin.
+    (.4, .1, 3, .5, 1),       # Hold the applied degree released by Price.
+    (.5, 0., 3, .5, 1),       # The recovery threshold itself permits a handoff.
+    (.500001, 0., 3, .5, 0),
+    (.4, 0., 3, .3, 0),
+    (.6, 0., 3, .6, 1),
+    (.4, .11, 3, .5, 0),      # Rapidly growing shortfall still blocks a handoff.
+])
+def test_room_margin_for_price_handoff_and_new_trim(config, states, forecasts, shortfall, trend, old_price, recovery, addition):
+    e = prepare_price_handoff(config, states, forecasts, old_price, old_price)
+    e.state["settings"].update(room_margin=.1, room_recovery=recovery)
+    e.state["changed"] = NOW-1800
+    e.data["limited_max_deficit"] = shortfall
+    e.observations["deficit"]["change"] = trend
+    set_quarter_price(e, NOW, .015)
+    e.decide(NOW)
+    assert e.state["decision_price_reduction"] == 2
+    assert e.efficiency_addition == addition
+    assert e.state["effective_reduction"] == 2+addition
+
+
 @pytest.mark.parametrize("blocker", ["shortfall", "gap", "comfort", "readback", "floor"])
 def test_price_handoff_requires_eligible_shift(config, states, forecasts, blocker):
     e = prepare_price_handoff(config, states, forecasts, 3, 3)
@@ -381,7 +404,7 @@ def test_price_handoff_requires_eligible_shift(config, states, forecasts, blocke
     states["sensor.shift"]["state"] = "-1" if blocker == "readback" else "-3"
     e.sample(states, NOW)
     if blocker == "shortfall":
-        e.data["limited_max_deficit"] = .3
+        e.data["limited_max_deficit"] = e.state["settings"]["room_recovery"] + .01
     elif blocker == "gap":
         e.observations["eligible_gap"]["minimum"] = 1.4
     elif blocker == "comfort":
