@@ -347,6 +347,12 @@ class Engine:
         s, d, p = self.state, self.data, self.config["parameters"]
         if not d:
             return False
+        s["decision_at"] = now
+        s["evaluated_reduction"] = s["effective_reduction"]
+        if d["dhw_mode"] and s["enabled"] and (s["price_enabled"] or s["efficiency_enabled"]):
+            # Preserve the last heating decision, including Price's share for the next handoff.
+            s.update(reason="dhw_pause", efficiency_reason="dhw_pause", next_step_at=None)
+            return True
         base = curve(d["curve_outdoor"], p, integer=True) if d["curve_outdoor"] is not None else None
         maximum = int(p["maximum_reduction"])
         if base is not None:
@@ -356,8 +362,6 @@ class Engine:
         forecast_ok = valid_forecast(s["forecast"], now)
         capacity = self.estimated_capacity_reached(now)
         defrost = self.defrost_protection(now)
-        s["decision_at"] = now
-        s["evaluated_reduction"] = s["effective_reduction"]
         efficiency_waiting = self._efficiency(now, price, forecast_ok, capacity, defrost, maximum)
         s["decision_price_reduction"] = price
         s["combined_reduction"] = price + self.efficiency_addition
@@ -385,7 +389,7 @@ class Engine:
             problem = (s["forecast"].get("problems") or [self.price_state(now)])[0]
             return 0, "forecast_unavailable: " + problem
         if not d["space_ok"]:
-            return 0, "DHW_mode" if d["dhw_mode"] else "invalid_water_measurements"
+            return 0, "invalid_water_measurements"
         if not d["rooms_ok"]:
             return 0, "room_data_missing: " + ", ".join(d["room_missing"])
         if self.comfort_protection:

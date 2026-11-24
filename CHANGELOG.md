@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.0-beta.12
+
+- Hold the last space-heating advice, Price and Efficiency contributions, and step timers during domestic hot water cycles. Resume evaluation at the next scheduled Room decision.
+
 ## 2.0.0-beta.11
 
 - Let Efficiency keep an eligible reduction when Price drops, preserving the applied shift and its step timer.

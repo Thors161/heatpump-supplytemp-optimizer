@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.11**.
+This is **2.0.0-beta.12**.
 
 ## Installation
 
@@ -246,6 +246,12 @@ Negative prices and export opportunity costs are retained.
 - Efficiency backs off its own trim when the current return gap is at or below its low
   limit. More trim requires the lowest eligible gap over 30 minutes to reach
   the high limit.
+- During DHW, the advisor holds the last space-heating shift and its Price and
+  Efficiency contributions. Scheduled Tank decisions show **Paused for DHW**.
+  A pump-reported shift of zero during Tank mode leaves the held advice intact.
+  On return to Room, an external shift automation can reapply that advice;
+  the optimizer resumes evaluation at the next scheduled decision. The usual
+  readiness checks and step timers apply. Advisor Off still clears advice.
 - Hydraulic hold is bounded to 30 minutes and is not extended by repeated checks.
 - Frequent defrost protection is shared by Price and Efficiency. Map a **Defrost
   state** sensor under **Heat pump** and set **Minimum defrost interval** in the

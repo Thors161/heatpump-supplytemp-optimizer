@@ -681,23 +681,88 @@ def test_late_boundary_splits_measured_power(config, states):
     assert history["interval"]["area"] == pytest.approx(8*4.)
 
 
-def test_dhw_backs_off_then_rebuilds_heating_observations(config, states, forecasts):
-    e = prepare(config, states, forecasts)
-    e.state.update(efficiency_addition=1, effective_reduction=3, decision_price_reduction=2)
+def test_dhw_holds_heating_decision_across_quarters_and_restart(config, states, forecasts):
+    e = prepare_price_handoff(config, states, forecasts, old_price=2, applied=3)
+    e.state.update(efficiency_addition=1, combined_reduction=3, protected_reduction=3,
+                   baseline=34, target=31, next_step_at=NOW+900)
+    keys = ("effective_reduction", "efficiency_addition", "decision_price_reduction",
+            "combined_reduction", "protected_reduction", "baseline", "target", "changed", "efficiency_changed")
+    held = {key: e.state[key] for key in keys}
     states[config["inputs"]["heating_mode"]]["state"] = "Tank"
-    e.sample(states, NOW+900)
-    set_quarter_price(e, NOW+900, .015)
-    e.decide(NOW+900)
-    assert e.state["combined_reduction"] == 3
-    assert e.state["protected_reduction"] == 0
-    assert e.state["effective_reduction"] == 2
-    assert e.state["reason"].startswith("DHW_mode")
-    assert not e.observations_ready
-    assert not e.efficiency_gap.samples
+    states["sensor.shift"]["state"] = "0"
+    for quarter in range(1, 5):
+        now = NOW+quarter*900
+        if quarter == 3:
+            e = Engine(config, e.serialize(), now)
+        e.sample(states, now)
+        set_quarter_price(e, now, 0.)
+        assert e.decide(now)
+        assert e.state["reason"] == e.state["efficiency_reason"] == "dhw_pause"
+        assert {key: e.state[key] for key in keys} == held
+        assert e.state["decision_at"] == now and e.state["next_step_at"] is None
+        assert e.shift_confirmation(now) == "inactive"
+        assert not e.observations_ready and not e.efficiency_gap.samples
+
     states[config["inputs"]["heating_mode"]]["state"] = "Room"
-    for minute in range(16, 47):
+    e.sample(states, now+60)
+    assert e.state["decision_at"] == now and e.state["effective_reduction"] == 3
+    states["sensor.shift"]["state"] = "-3"
+    for minute in range(2, 16):
+        e.sample(states, now+minute*60)
+    set_quarter_price(e, now+900, 0.)
+    e.decide(now+900)
+    assert e.state["decision_price_reduction"] == 0
+    assert e.state["efficiency_reason"] == "efficiency_observations_warming_up"
+    assert e.state["reason"] == "hydraulic_history_hold"
+    assert e.state["effective_reduction"] == 3
+
+
+def test_eligible_room_decision_can_take_over_price_released_during_dhw(config, states, forecasts):
+    e = prepare_price_handoff(config, states, forecasts, old_price=3, applied=3)
+    mode = states[config["inputs"]["heating_mode"]]
+    mode["state"] = "Tank"
+    e.sample(states, NOW)
+    set_quarter_price(e, NOW, 0.)
+    e.decide(NOW)
+    mode["state"] = "Room"
+    for minute in range(1, 46):
         e.sample(states, NOW+minute*60)
-    assert e.hydraulics_ready and e.observations_ready
+    # Exercise the decision with a fully rebuilt Room window.
+    now = NOW+2700
+    set_quarter_price(e, now, 0.)
+    e.decide(now)
+    assert e.state["efficiency_reason"] == "efficiency_holds_released_price"
+    assert e.state["decision_price_reduction"] == 0
+    assert e.efficiency_addition == e.state["effective_reduction"] == 3
+
+
+def test_short_tank_cycle_does_not_trigger_a_decision(config, states, forecasts):
+    e = prepare(config, states, forecasts)
+    e.decide(NOW)
+    before = dict(e.state)
+    for minute, mode in [(2, "Tank"), (6, "Room")]:
+        states[config["inputs"]["heating_mode"]]["state"] = mode
+        e.sample(states, NOW+minute*60)
+        for key in ("decision_at", "reason", "effective_reduction", "efficiency_addition", "changed"):
+            assert e.state[key] == before[key]
+
+
+@pytest.mark.parametrize(("mode","enabled","expected","final"), [
+    ("Tank", False, "advice_disabled", 0),
+    ("unknown", True, "invalid_water_measurements", 2),
+    ("Room", True, "invalid_water_measurements", 2),
+])
+def test_dhw_hold_only_applies_to_enabled_advice_in_tank_mode(
+        config, states, forecasts, mode, enabled, expected, final):
+    e = prepare(config, states, forecasts)
+    e.state.update(enabled=enabled, effective_reduction=3, efficiency_addition=1)
+    states[config["inputs"]["heating_mode"]]["state"] = mode
+    if mode == "Room":
+        states[config["inputs"]["primary_return"]]["state"] = "unavailable"
+    e.sample(states, NOW)
+    e.decide(NOW)
+    assert e.state["reason"].split(";")[0] == expected
+    assert e.state["effective_reduction"] == final
 
 
 def test_repeated_defrost_keeps_ready_window_while_protection_holds(config, states, forecasts):

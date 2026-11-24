@@ -16,6 +16,7 @@ DESCRIPTIONS = {'advice_disabled': 'The advisor is disabled; final reduction is 
                          'problems below.',
  'forecast_stale': 'The forecast has expired; a valid new forecast is required.',
  'forecast_missing': 'No usable forecast is available yet.',
+ 'dhw_pause': 'Paused for DHW. The advisor holds its last space-heating advice until a Room decision.',
  'DHW_mode': 'Domestic hot water is active; the advisor requests a return towards zero reduction.',
  'valve_state_unknown': 'The Room/DHW valve state is not available.',
  'invalid_water_measurements': 'Water or heating measurements are missing or invalid.',
