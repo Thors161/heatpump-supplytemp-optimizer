@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.0-beta.13
+
+- Count valid space-heating samples in partial quarters for Savings graphs and totals, including across restarts.
+
 ## 2.0.0-beta.12
 
 - Hold the last space-heating advice, Price and Efficiency contributions, and step timers during domestic hot water cycles. Resume evaluation at the next scheduled Room decision.

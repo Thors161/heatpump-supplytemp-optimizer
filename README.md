@@ -47,7 +47,7 @@ downward adjustment when conditions allow.
 - The generated **Forecast** tab uses the existing ApexCharts Card. Every graph
   outside Forecast uses native HA history/statistics cards.
 
-This is **2.0.0-beta.12**.
+This is **2.0.0-beta.13**.
 
 ## Installation
 
@@ -332,10 +332,11 @@ import tariff and displaced solar exports. Signed cumulative kWh and EUR savings
 start with the first matched quarter and persist across restarts. These estimate
 the effect of water temperature for the same heat, excluding load-shifting savings.
 
-The coverage table shows matched hours for each local day. Only complete observed
-space-heating quarters with a confirmed model, heat, power, weather-curve temperature,
-local temperature and pricing data count. Solar production also requires household
-load data. Restart gaps, mixed DHW quarters and mismatched nonzero shifts are excluded.
+The coverage table shows matched hours for each local day. At quarter end the integration uses the valid
+space-heating seconds with a confirmed model, heat, power, weather-curve temperature,
+local temperature and pricing data. A partial quarter contributes its observed energy
+and cost directly, with no scaling or minimum coverage. Solar production also requires household
+load data. Restart gaps, time in DHW and mismatched nonzero shifts are excluded.
 With no readback mapping the comparison uses the final advised shift and identifies
 that basis on the tab. A missing configured readback makes that interval unmatched.
 

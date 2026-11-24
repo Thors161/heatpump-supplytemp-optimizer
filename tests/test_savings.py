@@ -73,14 +73,18 @@ def test_quarter_prices_include_export_and_signed_savings(config, states):
 @pytest.mark.parametrize("entity,value", [("sensor.demo_heating_mode","Tank"),
                                            ("sensor.demo_heat_power","unknown"),
                                            ("sensor.demo_electricity_price","unavailable")])
-def test_exclude_incomplete_quarters(config, states, entity, value):
+def test_partial_quarter_excludes_only_invalid_time(config, states, entity, value):
     e = Engine(config, now=NOW)
     sample(e, states, minutes=3)
     old = states[entity]["state"]
     states[entity]["state"] = value
     e.sample(states, NOW+240)
     states[entity]["state"] = old
-    assert not sample(e, states, NOW+300, minutes=10)
+    ledger = sample(e, states, NOW+300, minutes=10)
+    day = next(iter(ledger["days"].values()))
+    assert day["quarters"] == pytest.approx(840/900)
+    assert day["actual_kwh"] == pytest.approx(.8*840/3600)
+    assert ledger["ratios"]["actual_cop"] == pytest.approx(5.)
     assert sample(e, states, NOW+900)["last_quarter"] == NOW+900
 
 
@@ -100,9 +104,51 @@ def test_readback_and_restart_across_local_midnight(config, states):
     sample(e, states, start+1800, minutes=6)
     restored = Engine(config, e.serialize(), start+2220, tz=tz)
     ledger = sample(restored, states, start+2220, minutes=23)
-    assert ledger["days"]["2026-10-26"]["quarters"] == 1
+    assert ledger["days"]["2026-10-26"]["quarters"] == pytest.approx(1 + 840/900)
     assert ledger["last_quarter"] == start+2700
     assert ledger["saved_kwh"] > 0
     total = ledger["saved_kwh"]
     replay = Engine(config, restored.serialize(), start+2700, tz=tz)
     assert sample(replay, states, start+2700)["saved_kwh"] == total
+
+
+@pytest.mark.parametrize(("role", "invalid", "gap"), [("reported_shift", "-1", 8),
+                                                      ("pv_power", "unavailable", 10)])
+def test_brief_dropout_reduces_coverage_instead_of_removing_graph_point(config, states, role, invalid, gap):
+    config["inputs"]["reported_shift"] = "sensor.shift"
+    states["sensor.shift"] = {"state": "-2", "attributes": {"unit_of_measurement": "°C"}}
+    e = Engine(config, now=NOW)
+    e.state.update(enabled=True, effective_reduction=2)
+    sensor = states[config["inputs"][role]]
+    good = sensor["state"]
+    sample(e, states, minutes=5)
+    sensor["state"] = invalid
+    e.sample(states, NOW+300)
+    sensor["state"] = good
+    e.sample(states, NOW+300+gap)
+    ledger = sample(e, states, NOW+360, minutes=9)
+    day = next(iter(ledger["days"].values()))
+    assert day["quarters"] == pytest.approx((900-gap)/900)
+    assert day["actual_kwh"] == pytest.approx(.8*(900-gap)/3600)
+    for unit in ("kwh", "eur"):
+        assert ledger["saved_"+unit] == pytest.approx(day["baseline_"+unit]-day["actual_"+unit])
+    assert all(value is not None for value in ledger["ratios"].values())
+
+
+def test_partial_quarter_closes_during_tank_cycle(config, states):
+    e = Engine(config, now=NOW)
+    sample(e, states, minutes=6)
+    states["sensor.demo_heating_mode"]["state"] = "Tank"
+    ledger = sample(e, states, NOW+360, minutes=24)
+    day = next(iter(ledger["days"].values()))
+    assert day["quarters"] == pytest.approx(360/900)
+    assert ledger["last_quarter"] == NOW
+    assert day["actual_kwh"] == pytest.approx(.08)
+
+
+@pytest.mark.parametrize("role", ["heat_power", "electric_power"])
+def test_zero_heat_or_electricity_leaves_ratios_blank(config, states, role):
+    states[config["inputs"][role]]["state"] = "0"
+    e = Engine(config, now=NOW)
+    ledger = sample(e, states, minutes=15)
+    assert all(value is None for value in ledger["ratios"].values())

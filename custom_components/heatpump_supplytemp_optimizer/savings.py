@@ -1,4 +1,4 @@
-"""Compare the same measured space heat in complete, matched quarters."""
+"""Compare the same measured space heat over matched intervals within each quarter."""
 from datetime import datetime, timedelta, timezone
 
 from .const import MAX_SAMPLE_GAP
@@ -62,48 +62,56 @@ class Savings:
         self.tz = tz
         self.previous = None
         self.previous_time = None
-        self.quarter = None
-        self.seconds = 0.
-        self.energy = {}
 
     def observe(self, now, sample):
         start = self.previous_time
         if start is not None and now < start:
             return
-        continuous = start is not None and now-start <= MAX_SAMPLE_GAP and self.previous is not None
-        if continuous:
+        pending = self.stored.get("pending")
+        if start is not None and now-start <= MAX_SAMPLE_GAP and self.previous is not None:
+            # Skip time already integrated if a saved interval is replayed.
+            if pending:
+                start = max(start, pending["end"])
             while start < now:
                 quarter = int(start//900)*900
                 end = min(now, quarter+900)
-                if quarter != self.quarter:
-                    self.quarter, self.seconds, self.energy = quarter, 0., {}
-                seconds = end-start
-                self.seconds += seconds
-                for key, rate in self.previous.items():
-                    self.energy[key] = self.energy.get(key, 0.) + rate*seconds/3600
-                if end == quarter+900 and self.seconds >= 900-1e-6:
-                    self._complete(quarter)
+                if pending and quarter > pending["quarter"]:
+                    self._complete(pending)
+                    pending = None
+                if quarter > self.stored.get("last_quarter", -1):
+                    if pending is None:
+                        pending = self.stored["pending"] = dict(quarter=quarter, seconds=0., energy={})
+                    seconds = end-start
+                    pending["end"] = end
+                    pending["seconds"] += seconds
+                    energy = pending["energy"]
+                    for key, rate in self.previous.items():
+                        energy[key] = energy.get(key, 0.) + rate*seconds/3600
                 start = end
+        # Close even when the final reading was missing or the engine restarted.
+        if pending and now >= pending["quarter"]+900:
+            self._complete(pending)
         self.previous_time, self.previous = now, sample
 
-    def _complete(self, quarter):
-        s, e = self.stored, self.energy
-        if quarter <= s.get("last_quarter", -1):
-            return
+    def _complete(self, pending):
+        s, e = self.stored, pending["energy"]
+        quarter = pending["quarter"]
+        del s["pending"]
         s["last_quarter"] = quarter
         heat = e["heat"]
         ratios = {}
         for scenario in SCENARIOS:
             power = e[scenario+"_kwh"]
             ratios[scenario+"_cop"] = heat/power if heat > 0 and power > 0 else None
-            ratios[scenario+"_unit_cost"] = e[scenario+"_eur"]/heat if heat > 0 else None
+            ratios[scenario+"_unit_cost"] = e[scenario+"_eur"]/heat if heat > 0 and power > 0 else None
         s["ratios"] = ratios
         local = datetime.fromtimestamp(quarter, self.tz)
         date = local.date()
         days = s.setdefault("days", {})
         day = days.setdefault(date.isoformat(), {"start": local.replace(hour=0, minute=0, second=0).timestamp(),
                                                  "quarters": 0})
-        day["quarters"] += 1
+        # Quarter equivalents keep coverage compatible with previously saved full quarters.
+        day["quarters"] += pending["seconds"]/900
         for unit in ("kwh", "eur"):
             for side in ("baseline", "actual"):
                 key = side+"_"+unit
